@@ -16,6 +16,7 @@ const keys = (...objects) => [...new Set(objects.flatMap(o=>Object.keys(o||{})))
 const stampFor = (s,group,key) => meta(s)[group]?.[key] || zero;
 
 export function stampState(state, previous, device, now=Date.now()) {
+  if(previous&&state.sync&&equal({...state,sync:undefined},{...previous,sync:undefined}))return state;
   const old=meta(previous), retained=meta(state);
   const clock=Math.max(now,old.clock||0,retained.clock||0)+1;
   const stamp=`${String(clock).padStart(16,'0')}:${device}`;

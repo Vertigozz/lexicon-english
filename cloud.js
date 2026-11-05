@@ -6,7 +6,7 @@ export const configured=Boolean(cloudConfig.url&&cloudConfig.publishableKey);
 export class CloudSync {
   constructor({catalog,read,write,changed,status,account,recovery}) {
     Object.assign(this,{catalog,read,write,changed,status,account,recovery});
-    this.user=null;this.chain=Promise.resolve();this.generation=0;
+    this.user=null;this.generation=0;this.changeVersion=0;this.dirty=false;this.lastSyncedUser=null;
   }
   async start(){
     if(!configured){this.status('unconfigured');return;}
@@ -21,7 +21,7 @@ export class CloudSync {
   }
   async setUser(user){
     if((this.user?.id||null)===(user?.id||null)&&this.started)return this.accountTransition;
-    this.started=true;this.generation++;this.user=user;clearTimeout(this.timer);
+    this.started=true;this.generation++;this.user=user;this.dirty=false;this.lastSyncedUser=null;clearTimeout(this.timer);this.timer=null;
     this.accountTransition=(async()=>{await this.account(user);if(user)await this.sync();else this.status('guest');})();
     return this.accountTransition;
   }
@@ -33,15 +33,17 @@ export class CloudSync {
   async resetPassword(email){const {error}=await this.client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?reset-password=1'});if(error)throw error;}
   async updatePassword(password){const {error}=await this.client.auth.updateUser({password});if(error)throw error;}
   async logout(){await this.sync(true);const {error}=await this.client.auth.signOut({scope:'local'});if(error)throw error;await this.setUser(null);}
-  schedule(){if(!this.user)return;this.status('pending');clearTimeout(this.timer);this.timer=setTimeout(()=>this.sync(),900);}
+  schedule(){if(!this.user)return;this.dirty=true;this.changeVersion++;this.status('pending');clearTimeout(this.timer);this.timer=setTimeout(()=>{this.timer=null;this.sync();},1500);}
   sync(strict=false){
-    clearTimeout(this.timer);
     const user=this.user,generation=this.generation;
     if(!user)return Promise.resolve();
-    this.chain=this.chain.catch(()=>{}).then(async()=>{
+    if(this.flight?.generation===generation)return strict?this.flight.promise.then(()=>this.sync(true)):this.flight.promise;
+    clearTimeout(this.timer);this.timer=null;
+    const version=this.changeVersion;
+    const promise=(async()=>{
       if(generation!==this.generation)return;
       if(!navigator.onLine){this.status('offline');if(strict)throw new Error('Для выхода подключитесь к интернету и синхронизируйте прогресс.');return;}
-      this.status('syncing');
+      if(strict||this.dirty||this.lastSyncedUser!==user.id)this.status('syncing');
       try {
         for(let attempt=0;attempt<6;attempt++){
           const {data:row,error}=await this.client.from('lexicon_progress').select('document,revision,updated_at').eq('user_id',user.id).maybeSingle().abortSignal(AbortSignal.timeout(15000));
@@ -51,19 +53,29 @@ export class CloudSync {
           const local=await this.read(user.id);
           if(!local)throw new Error('Локальная копия ещё не готова.');
           const merged=mergeStates(local,remote),document=packState(merged,this.catalog());
-          if(row&&stateSignature(row.document)===stateSignature(document)){
-            const saved=await this.write(merged,user.id);if(generation!==this.generation)return;
-            await this.changed(saved);this.status('synced',row.updated_at);return;
+          let savedAt=row?.updated_at;
+          if(!row||stateSignature(row.document)!==stateSignature(document)){
+            const {data:commit,error:writeError}=await this.client.rpc('lexicon_save_progress',{expected_revision:row?.revision||0,new_document:document}).abortSignal(AbortSignal.timeout(15000));
+            if(writeError)throw writeError;if(generation!==this.generation)return;
+            if(!commit?.length)continue;
+            savedAt=commit[0].updated_at;
           }
-          const {data:commit,error:writeError}=await this.client.rpc('lexicon_save_progress',{expected_revision:row?.revision||0,new_document:document}).abortSignal(AbortSignal.timeout(15000));
-          if(writeError)throw writeError;if(generation!==this.generation)return;
-          if(!commit?.length)continue;
-          const saved=await this.write(merged,user.id);await this.changed(saved);
+          const needsMerge=stateSignature(local)!==stateSignature(merged);
+          const saved=needsMerge?await this.write(merged,user.id):await this.read(user.id);
+          if(generation!==this.generation)return;
+          if(needsMerge)await this.changed(saved);
           if(stateSignature(packState(saved,this.catalog()))!==stateSignature(document))continue;
-          this.status('synced',commit[0].updated_at);return;
+          if(version===this.changeVersion)this.dirty=false;
+          this.lastSyncedUser=user.id;this.status(this.dirty?'pending':'synced',savedAt);return;
         }
         throw new Error('Другой сеанс активно меняет данные. Повторим синхронизацию автоматически.');
       }catch(error){this.status('error',null,error.message);if(strict)throw error;}
-    });return this.chain;
+    })();
+    this.flight={generation,promise};
+    promise.finally(()=>{
+      if(this.flight?.promise===promise)this.flight=null;
+      if(generation===this.generation&&version!==this.changeVersion&&!this.timer)this.timer=setTimeout(()=>{this.timer=null;this.sync();},1500);
+    }).catch(()=>{});
+    return promise;
   }
 }
