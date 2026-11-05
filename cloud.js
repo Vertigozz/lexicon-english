@@ -4,8 +4,8 @@ import {validateBackup} from './core.js';
 
 export const configured=Boolean(cloudConfig.url&&cloudConfig.publishableKey);
 export class CloudSync {
-  constructor({catalog,read,write,changed,status,account}) {
-    Object.assign(this,{catalog,read,write,changed,status,account});
+  constructor({catalog,read,write,changed,status,account,recovery}) {
+    Object.assign(this,{catalog,read,write,changed,status,account,recovery});
     this.user=null;this.chain=Promise.resolve();this.generation=0;
   }
   async start(){
@@ -14,16 +14,16 @@ export class CloudSync {
     this.client=createClient(cloudConfig.url,cloudConfig.publishableKey,{
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lexicon-cloud-auth-v1'}
     });
-    this.client.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>this.setUser(session?.user||null).catch(e=>this.status('error',null,e.message)),0);});
+    this.client.auth.onAuthStateChange((event,session)=>{setTimeout(async()=>{try{await this.setUser(session?.user||null);if(event==='PASSWORD_RECOVERY')this.recovery?.();}catch(e){this.status('error',null,e.message);}},0);});
     const {data,error}=await this.client.auth.getSession();if(error)throw error;
     await this.setUser(data.session?.user||null);
     this.interval=setInterval(()=>{if(!document.hidden)this.sync();},15000);
   }
   async setUser(user){
-    if((this.user?.id||null)===(user?.id||null)&&this.started)return;
+    if((this.user?.id||null)===(user?.id||null)&&this.started)return this.accountTransition;
     this.started=true;this.generation++;this.user=user;clearTimeout(this.timer);
-    await this.account(user);
-    if(user)await this.sync();else this.status('guest');
+    this.accountTransition=(async()=>{await this.account(user);if(user)await this.sync();else this.status('guest');})();
+    return this.accountTransition;
   }
   async login(email,password){const {data,error}=await this.client.auth.signInWithPassword({email,password});if(error)throw error;await this.setUser(data.user);}
   async signup(email,password){
