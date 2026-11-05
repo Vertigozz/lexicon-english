@@ -1,7 +1,14 @@
 // A convergent learning log plus versioned registers for mutable fields.
 // A reset starts a new epoch, so an old offline device cannot resurrect progress.
 const clone = value => structuredClone(value);
-const equal = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+function canonical(value){
+  if(Array.isArray(value))return value.map(canonical);
+  if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().filter(k=>value[k]!==undefined).map(k=>[k,canonical(value[k])]));
+  return value;
+}
+// PostgreSQL jsonb reorders object keys. Equality must compare values, not wire order.
+export const stateSignature=value=>JSON.stringify(canonical(value));
+const equal = (a,b) => stateSignature(a) === stateSignature(b);
 const zero = '0000000000000000:legacy';
 const latest = (a=zero,b=zero) => a>b?a:b;
 const meta = s => s?.sync || {};
@@ -42,7 +49,7 @@ export function mergeStates(left,right) {
     m[group]={};for(const key of keys(meta(a)[group],meta(b)[group]))m[group][key]=latest(stampFor(a,group,key),stampFor(b,group,key));
   }
   m.active=latest(meta(a).active,meta(b).active);m.session=latest(meta(a).session,meta(b).session);
-  const choose=(x,y,sx,sy)=>sx>sy?x:sy>sx?y:JSON.stringify(x??null)>JSON.stringify(y??null)?x:y;
+  const choose=(x,y,sx,sy)=>sx>sy?x:sy>sx?y:stateSignature(x??null)>stateSignature(y??null)?x:y;
   const settings={};
   for(const key of keys(a.settings,b.settings))settings[key]=clone(choose(a.settings[key],b.settings[key],stampFor(a,'settings',key),stampFor(b,'settings',key)));
   const ad=new Map(a.decks.map(d=>[d.deck.id,d])),bd=new Map(b.decks.map(d=>[d.deck.id,d]));

@@ -1,5 +1,5 @@
 import {cloudConfig} from './cloud-config.js';
-import {mergeStates,packState,unpackState} from './sync-state.js';
+import {mergeStates,packState,unpackState,stateSignature} from './sync-state.js';
 import {validateBackup} from './core.js';
 
 export const configured=Boolean(cloudConfig.url&&cloudConfig.publishableKey);
@@ -51,7 +51,7 @@ export class CloudSync {
           const local=await this.read(user.id);
           if(!local)throw new Error('Локальная копия ещё не готова.');
           const merged=mergeStates(local,remote),document=packState(merged,this.catalog());
-          if(row&&JSON.stringify(row.document)===JSON.stringify(document)){
+          if(row&&stateSignature(row.document)===stateSignature(document)){
             const saved=await this.write(merged,user.id);if(generation!==this.generation)return;
             await this.changed(saved);this.status('synced',row.updated_at);return;
           }
@@ -59,7 +59,7 @@ export class CloudSync {
           if(writeError)throw writeError;if(generation!==this.generation)return;
           if(!commit?.length)continue;
           const saved=await this.write(merged,user.id);await this.changed(saved);
-          if(JSON.stringify(packState(saved,this.catalog()))!==JSON.stringify(document))continue;
+          if(stateSignature(packState(saved,this.catalog()))!==stateSignature(document))continue;
           this.status('synced',commit[0].updated_at);return;
         }
         throw new Error('Другой сеанс активно меняет данные. Повторим синхронизацию автоматически.');

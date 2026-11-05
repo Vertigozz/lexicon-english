@@ -1,4 +1,4 @@
-import {mergeStates} from './sync-state.js';
+import {mergeStates,stateSignature} from './sync-state.js';
 const KEY='lexicon-state-v1';let db,queue=Promise.resolve();
 const stateKey=scope=>scope==='guest'?'state':`state:${scope}`;
 const fallbackKey=scope=>scope==='guest'?KEY:`${KEY}:${scope}`;
@@ -13,17 +13,17 @@ export async function readState(scope='guest'){
 export function writeState(state,scope='guest'){
   const snapshot=structuredClone(state);
   queue=queue.catch(()=>{}).then(async()=>{
-    let merged;
+    let merged,changed=false;
     if(db)await new Promise((resolve,reject)=>{
       const t=db.transaction('app','readwrite'),store=t.objectStore('app'),r=store.get(stateKey(scope));
-      r.onsuccess=()=>{try{merged=mergeStates(r.result,snapshot);store.put(merged,stateKey(scope));}catch(error){t.abort();reject(error);}};
+      r.onsuccess=()=>{try{merged=mergeStates(r.result,snapshot);changed=stateSignature(r.result)!==stateSignature(merged);if(changed)store.put(merged,stateKey(scope));}catch(error){t.abort();reject(error);}};
       t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||new Error('Запись отменена.'));
     });
     else {
-      const commit=()=>{const previous=JSON.parse(localStorage.getItem(fallbackKey(scope))||'null');merged=mergeStates(previous,snapshot);localStorage.setItem(fallbackKey(scope),JSON.stringify(merged));};
+      const commit=()=>{const previous=JSON.parse(localStorage.getItem(fallbackKey(scope))||'null');merged=mergeStates(previous,snapshot);changed=stateSignature(previous)!==stateSignature(merged);if(changed)localStorage.setItem(fallbackKey(scope),JSON.stringify(merged));};
       if(navigator.locks)await navigator.locks.request(`lexicon:${scope}`,commit);else commit();
     }
-    try{localStorage.setItem('lexicon-storage-changed',JSON.stringify({scope,at:Date.now(),id:crypto.randomUUID()}));}catch{}
+    if(changed)try{localStorage.setItem('lexicon-storage-changed',JSON.stringify({scope,at:Date.now(),id:crypto.randomUUID()}));}catch{}
     return merged;
   });return queue;
 }
