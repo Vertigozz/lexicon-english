@@ -1,0 +1,1484 @@
+{
+  "schemaVersion": 1,
+  "deck": {
+    "id": "english-b1b2",
+    "title": "English B1–B2",
+    "sourceLanguage": "ru",
+    "targetLanguage": "en",
+    "version": 1
+  },
+  "words": [
+    {
+      "id": "b1b2-001-01",
+      "module": 1,
+      "position": 1,
+      "word": "particularly",
+      "ipa": "/pəˈtɪkjələli/",
+      "translations": [
+        "особенно"
+      ],
+      "recallPrompt": "особенно",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "This is particularly important for me.",
+          "ru": "Это особенно важно для меня."
+        },
+        {
+          "en": "I am particularly interested in this subject.",
+          "ru": "Меня особенно интересует эта тема."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-1-c1",
+          "en": "This is {{gap}} important for me.",
+          "ru": "Это особенно важно для меня.",
+          "acceptedAnswers": [
+            "particularly"
+          ]
+        },
+        {
+          "id": "b1b2-1-c2",
+          "en": "I am {{gap}} interested in this subject.",
+          "ru": "Меня особенно интересует эта тема.",
+          "acceptedAnswers": [
+            "particularly"
+          ]
+        },
+        {
+          "id": "b1b2-1-c3",
+          "en": "The food was {{gap}} good today.",
+          "ru": "Сегодня еда была особенно вкусной.",
+          "acceptedAnswers": [
+            "particularly"
+          ]
+        },
+        {
+          "id": "b1b2-1-c4",
+          "en": "She is {{gap}} good at maths.",
+          "ru": "Она особенно хорошо разбирается в математике.",
+          "acceptedAnswers": [
+            "particularly"
+          ]
+        },
+        {
+          "id": "b1b2-1-c5",
+          "en": "I {{gap}} enjoyed the last chapter.",
+          "ru": "Мне особенно понравилась последняя глава.",
+          "acceptedAnswers": [
+            "particularly"
+          ]
+        },
+        {
+          "id": "b1b2-1-c6",
+          "en": "This road is {{gap}} busy in the morning.",
+          "ru": "На этой дороге особенно много машин утром.",
+          "acceptedAnswers": [
+            "particularly"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-02",
+      "module": 1,
+      "position": 2,
+      "word": "maintain",
+      "ipa": "/meɪnˈteɪn/",
+      "translations": [
+        "поддерживать",
+        "сохранять"
+      ],
+      "recallPrompt": "поддерживать; сохранять",
+      "collocations": [
+        "maintain a balance",
+        "maintain high standards"
+      ],
+      "examples": [
+        {
+          "en": "We need to maintain a high level of service.",
+          "ru": "Нам нужно поддерживать высокий уровень обслуживания."
+        },
+        {
+          "en": "It is important to maintain a healthy weight.",
+          "ru": "Важно поддерживать здоровый вес."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-2-c1",
+          "en": "We need to {{gap}} a high level of service.",
+          "ru": "Нам нужно поддерживать высокий уровень обслуживания.",
+          "acceptedAnswers": [
+            "maintain"
+          ]
+        },
+        {
+          "id": "b1b2-2-c2",
+          "en": "It is important to {{gap}} a healthy weight.",
+          "ru": "Важно поддерживать здоровый вес.",
+          "acceptedAnswers": [
+            "maintain"
+          ]
+        },
+        {
+          "id": "b1b2-2-c3",
+          "en": "They work hard to {{gap}} the old building.",
+          "ru": "Они усердно работают, чтобы поддерживать старое здание в хорошем состоянии.",
+          "acceptedAnswers": [
+            "maintain"
+          ]
+        },
+        {
+          "id": "b1b2-2-c4",
+          "en": "We try to {{gap}} good relations with our neighbours.",
+          "ru": "Мы стараемся поддерживать хорошие отношения с соседями.",
+          "acceptedAnswers": [
+            "maintain"
+          ]
+        },
+        {
+          "id": "b1b2-2-c5",
+          "en": "Regular practice helps you {{gap}} your skills.",
+          "ru": "Регулярная практика помогает вам сохранять свои навыки.",
+          "acceptedAnswers": [
+            "maintain"
+          ]
+        },
+        {
+          "id": "b1b2-2-c6",
+          "en": "You should {{gap}} a safe distance from the car ahead.",
+          "ru": "Вам следует сохранять безопасную дистанцию от машины впереди.",
+          "acceptedAnswers": [
+            "maintain"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-03",
+      "module": 1,
+      "position": 3,
+      "word": "capacity",
+      "ipa": "/kəˈpæsəti/",
+      "translations": [
+        "вместимость",
+        "производственная мощность"
+      ],
+      "recallPrompt": "вместимость; производственная мощность",
+      "collocations": [
+        "at full capacity",
+        "storage capacity"
+      ],
+      "examples": [
+        {
+          "en": "The room has a capacity of fifty people.",
+          "ru": "Вместимость комнаты — пятьдесят человек."
+        },
+        {
+          "en": "The factory is working at full capacity.",
+          "ru": "Завод работает на полную мощность."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-3-c1",
+          "en": "The room has a {{gap}} of fifty people.",
+          "ru": "Вместимость комнаты — пятьдесят человек.",
+          "acceptedAnswers": [
+            "capacity"
+          ]
+        },
+        {
+          "id": "b1b2-3-c2",
+          "en": "The factory is working at full {{gap}}.",
+          "ru": "Завод работает на полную мощность.",
+          "acceptedAnswers": [
+            "capacity"
+          ]
+        },
+        {
+          "id": "b1b2-3-c3",
+          "en": "The new bus has a larger {{gap}}.",
+          "ru": "У нового автобуса больше вместимость.",
+          "acceptedAnswers": [
+            "capacity"
+          ]
+        },
+        {
+          "id": "b1b2-3-c4",
+          "en": "We need to increase the storage {{gap}}.",
+          "ru": "Нам нужно увеличить ёмкость хранилища.",
+          "acceptedAnswers": [
+            "capacity"
+          ]
+        },
+        {
+          "id": "b1b2-3-c5",
+          "en": "The stadium has a {{gap}} of twenty thousand.",
+          "ru": "Вместимость стадиона — двадцать тысяч человек.",
+          "acceptedAnswers": [
+            "capacity"
+          ]
+        },
+        {
+          "id": "b1b2-3-c6",
+          "en": "The hospital has reached its full {{gap}}.",
+          "ru": "Больница достигла своей полной вместимости.",
+          "acceptedAnswers": [
+            "capacity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-04",
+      "module": 1,
+      "position": 4,
+      "word": "approach",
+      "ipa": "/əˈprəʊtʃ/",
+      "translations": [
+        "подход",
+        "метод"
+      ],
+      "recallPrompt": "подход; метод",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "We need a different approach to this problem.",
+          "ru": "Нам нужен другой подход к этой проблеме."
+        },
+        {
+          "en": "Her approach to learning is very practical.",
+          "ru": "Её подход к обучению очень практичный."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-4-c1",
+          "en": "We need a different {{gap}} to this problem.",
+          "ru": "Нам нужен другой подход к этой проблеме.",
+          "acceptedAnswers": [
+            "approach"
+          ]
+        },
+        {
+          "id": "b1b2-4-c2",
+          "en": "Her {{gap}} to learning is very practical.",
+          "ru": "Её подход к обучению очень практичный.",
+          "acceptedAnswers": [
+            "approach"
+          ]
+        },
+        {
+          "id": "b1b2-4-c3",
+          "en": "This is a simple {{gap}} to saving money.",
+          "ru": "Это простой подход к экономии денег.",
+          "acceptedAnswers": [
+            "approach"
+          ]
+        },
+        {
+          "id": "b1b2-4-c4",
+          "en": "The teacher uses a new {{gap}} in class.",
+          "ru": "Учитель использует новый подход на занятиях.",
+          "acceptedAnswers": [
+            "approach"
+          ]
+        },
+        {
+          "id": "b1b2-4-c5",
+          "en": "I like your {{gap}} to the project.",
+          "ru": "Мне нравится твой подход к проекту.",
+          "acceptedAnswers": [
+            "approach"
+          ]
+        },
+        {
+          "id": "b1b2-4-c6",
+          "en": "A careful {{gap}} can prevent mistakes.",
+          "ru": "Внимательный подход может предотвратить ошибки.",
+          "acceptedAnswers": [
+            "approach"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-05",
+      "module": 1,
+      "position": 5,
+      "word": "benefit",
+      "ipa": "/ˈbenɪfɪt/",
+      "translations": [
+        "польза",
+        "преимущество"
+      ],
+      "recallPrompt": "польза; преимущество",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "The main benefit of walking is better health.",
+          "ru": "Главная польза ходьбы — улучшение здоровья."
+        },
+        {
+          "en": "What is the biggest benefit of this plan?",
+          "ru": "Каково самое большое преимущество этого плана?"
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-5-c1",
+          "en": "The main {{gap}} of walking is better health.",
+          "ru": "Главная польза ходьбы — улучшение здоровья.",
+          "acceptedAnswers": [
+            "benefit"
+          ]
+        },
+        {
+          "id": "b1b2-5-c2",
+          "en": "What is the biggest {{gap}} of this plan?",
+          "ru": "Каково самое большое преимущество этого плана?",
+          "acceptedAnswers": [
+            "benefit"
+          ]
+        },
+        {
+          "id": "b1b2-5-c3",
+          "en": "One {{gap}} of working here is free lunch.",
+          "ru": "Одно преимущество работы здесь — бесплатный обед.",
+          "acceptedAnswers": [
+            "benefit"
+          ]
+        },
+        {
+          "id": "b1b2-5-c4",
+          "en": "There is a clear {{gap}} to learning another language.",
+          "ru": "В изучении другого языка есть очевидная польза.",
+          "acceptedAnswers": [
+            "benefit"
+          ]
+        },
+        {
+          "id": "b1b2-5-c5",
+          "en": "The extra time is a real {{gap}}.",
+          "ru": "Дополнительное время — настоящее преимущество.",
+          "acceptedAnswers": [
+            "benefit"
+          ]
+        },
+        {
+          "id": "b1b2-5-c6",
+          "en": "Better sleep is an important {{gap}} of regular exercise.",
+          "ru": "Улучшение сна — важная польза регулярных физических упражнений.",
+          "acceptedAnswers": [
+            "benefit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-06",
+      "module": 1,
+      "position": 6,
+      "word": "consider",
+      "ipa": "/kənˈsɪdə/",
+      "translations": [
+        "обдумывать",
+        "рассматривать"
+      ],
+      "recallPrompt": "обдумывать; рассматривать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "Please consider my offer carefully.",
+          "ru": "Пожалуйста, внимательно обдумайте моё предложение."
+        },
+        {
+          "en": "We should consider all the options.",
+          "ru": "Нам следует рассмотреть все варианты."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-6-c1",
+          "en": "Please {{gap}} my offer carefully.",
+          "ru": "Пожалуйста, внимательно обдумайте моё предложение.",
+          "acceptedAnswers": [
+            "consider"
+          ]
+        },
+        {
+          "id": "b1b2-6-c2",
+          "en": "We should {{gap}} all the options.",
+          "ru": "Нам следует рассмотреть все варианты.",
+          "acceptedAnswers": [
+            "consider"
+          ]
+        },
+        {
+          "id": "b1b2-6-c3",
+          "en": "Did you {{gap}} taking the train?",
+          "ru": "Вы рассматривали возможность поехать на поезде?",
+          "acceptedAnswers": [
+            "consider"
+          ]
+        },
+        {
+          "id": "b1b2-6-c4",
+          "en": "I need time to {{gap}} your idea.",
+          "ru": "Мне нужно время, чтобы обдумать вашу идею.",
+          "acceptedAnswers": [
+            "consider"
+          ]
+        },
+        {
+          "id": "b1b2-6-c5",
+          "en": "You must {{gap}} the cost before you decide.",
+          "ru": "Вы должны учесть стоимость, прежде чем принять решение.",
+          "acceptedAnswers": [
+            "consider"
+          ]
+        },
+        {
+          "id": "b1b2-6-c6",
+          "en": "Let us {{gap}} a different solution.",
+          "ru": "Давайте рассмотрим другое решение.",
+          "acceptedAnswers": [
+            "consider"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-07",
+      "module": 1,
+      "position": 7,
+      "word": "develop",
+      "ipa": "/dɪˈveləp/",
+      "translations": [
+        "развивать",
+        "разрабатывать"
+      ],
+      "recallPrompt": "развивать; разрабатывать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "I want to develop my writing skills.",
+          "ru": "Я хочу развивать свои навыки письма."
+        },
+        {
+          "en": "They plan to develop a new product.",
+          "ru": "Они планируют разработать новый продукт."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-7-c1",
+          "en": "I want to {{gap}} my writing skills.",
+          "ru": "Я хочу развивать свои навыки письма.",
+          "acceptedAnswers": [
+            "develop"
+          ]
+        },
+        {
+          "id": "b1b2-7-c2",
+          "en": "They plan to {{gap}} a new product.",
+          "ru": "Они планируют разработать новый продукт.",
+          "acceptedAnswers": [
+            "develop"
+          ]
+        },
+        {
+          "id": "b1b2-7-c3",
+          "en": "Reading helps children {{gap}} their imagination.",
+          "ru": "Чтение помогает детям развивать воображение.",
+          "acceptedAnswers": [
+            "develop"
+          ]
+        },
+        {
+          "id": "b1b2-7-c4",
+          "en": "We need to {{gap}} a better system.",
+          "ru": "Нам нужно разработать более совершенную систему.",
+          "acceptedAnswers": [
+            "develop"
+          ]
+        },
+        {
+          "id": "b1b2-7-c5",
+          "en": "The course will help you {{gap}} new skills.",
+          "ru": "Курс поможет вам развить новые навыки.",
+          "acceptedAnswers": [
+            "develop"
+          ]
+        },
+        {
+          "id": "b1b2-7-c6",
+          "en": "They hope to {{gap}} the local economy.",
+          "ru": "Они надеются развивать местную экономику.",
+          "acceptedAnswers": [
+            "develop"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-08",
+      "module": 1,
+      "position": 8,
+      "word": "effort",
+      "ipa": "/ˈefət/",
+      "translations": [
+        "усилие",
+        "старание"
+      ],
+      "recallPrompt": "усилие; старание",
+      "collocations": [
+        "make an effort",
+        "put effort into"
+      ],
+      "examples": [
+        {
+          "en": "Learning a language takes time and effort.",
+          "ru": "Изучение языка требует времени и усилий."
+        },
+        {
+          "en": "Thank you for all your hard work and effort.",
+          "ru": "Спасибо за всю вашу усердную работу и старание."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-8-c1",
+          "en": "Learning a language takes time and {{gap}}.",
+          "ru": "Изучение языка требует времени и усилий.",
+          "acceptedAnswers": [
+            "effort"
+          ]
+        },
+        {
+          "id": "b1b2-8-c2",
+          "en": "Thank you for all your hard work and {{gap}}.",
+          "ru": "Спасибо за всю вашу усердную работу и старание.",
+          "acceptedAnswers": [
+            "effort"
+          ]
+        },
+        {
+          "id": "b1b2-8-c3",
+          "en": "She made a real {{gap}} to arrive on time.",
+          "ru": "Она действительно постаралась прийти вовремя.",
+          "acceptedAnswers": [
+            "effort"
+          ]
+        },
+        {
+          "id": "b1b2-8-c4",
+          "en": "The result was worth the {{gap}}.",
+          "ru": "Результат стоил затраченных усилий.",
+          "acceptedAnswers": [
+            "effort"
+          ]
+        },
+        {
+          "id": "b1b2-8-c5",
+          "en": "You need to put more {{gap}} into your work.",
+          "ru": "Вам нужно прикладывать больше усилий к своей работе.",
+          "acceptedAnswers": [
+            "effort"
+          ]
+        },
+        {
+          "id": "b1b2-8-c6",
+          "en": "It took a lot of {{gap}} to move the table.",
+          "ru": "Чтобы передвинуть стол, потребовалось много усилий.",
+          "acceptedAnswers": [
+            "effort"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-09",
+      "module": 1,
+      "position": 9,
+      "word": "improve",
+      "ipa": "/ɪmˈpruːv/",
+      "translations": [
+        "улучшать",
+        "совершенствовать"
+      ],
+      "recallPrompt": "улучшать; совершенствовать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "I want to improve my English.",
+          "ru": "Я хочу улучшить свой английский."
+        },
+        {
+          "en": "How can we improve this service?",
+          "ru": "Как мы можем улучшить эту услугу?"
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-9-c1",
+          "en": "I want to {{gap}} my English.",
+          "ru": "Я хочу улучшить свой английский.",
+          "acceptedAnswers": [
+            "improve"
+          ]
+        },
+        {
+          "id": "b1b2-9-c2",
+          "en": "How can we {{gap}} this service?",
+          "ru": "Как мы можем улучшить эту услугу?",
+          "acceptedAnswers": [
+            "improve"
+          ]
+        },
+        {
+          "id": "b1b2-9-c3",
+          "en": "Daily practice can {{gap}} your pronunciation.",
+          "ru": "Ежедневная практика может улучшить ваше произношение.",
+          "acceptedAnswers": [
+            "improve"
+          ]
+        },
+        {
+          "id": "b1b2-9-c4",
+          "en": "They hope to {{gap}} the quality of the food.",
+          "ru": "Они надеются улучшить качество еды.",
+          "acceptedAnswers": [
+            "improve"
+          ]
+        },
+        {
+          "id": "b1b2-9-c5",
+          "en": "These changes will {{gap}} our website.",
+          "ru": "Эти изменения улучшат наш сайт.",
+          "acceptedAnswers": [
+            "improve"
+          ]
+        },
+        {
+          "id": "b1b2-9-c6",
+          "en": "More sleep may {{gap}} your mood.",
+          "ru": "Более продолжительный сон может улучшить ваше настроение.",
+          "acceptedAnswers": [
+            "improve"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-001-10",
+      "module": 1,
+      "position": 10,
+      "word": "provide",
+      "ipa": "/prəˈvaɪd/",
+      "translations": [
+        "предоставлять",
+        "обеспечивать"
+      ],
+      "recallPrompt": "предоставлять; обеспечивать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "The hotel will provide clean towels.",
+          "ru": "Отель предоставит чистые полотенца."
+        },
+        {
+          "en": "Can you provide more information?",
+          "ru": "Можете ли вы предоставить больше информации?"
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-10-c1",
+          "en": "The hotel will {{gap}} clean towels.",
+          "ru": "Отель предоставит чистые полотенца.",
+          "acceptedAnswers": [
+            "provide"
+          ]
+        },
+        {
+          "id": "b1b2-10-c2",
+          "en": "Can you {{gap}} more information?",
+          "ru": "Можете ли вы предоставить больше информации?",
+          "acceptedAnswers": [
+            "provide"
+          ]
+        },
+        {
+          "id": "b1b2-10-c3",
+          "en": "Trees {{gap}} shade in the summer.",
+          "ru": "Деревья обеспечивают тень летом.",
+          "acceptedAnswers": [
+            "provide"
+          ]
+        },
+        {
+          "id": "b1b2-10-c4",
+          "en": "We {{gap}} free training for new staff.",
+          "ru": "Мы предоставляем бесплатное обучение новым сотрудникам.",
+          "acceptedAnswers": [
+            "provide"
+          ]
+        },
+        {
+          "id": "b1b2-10-c5",
+          "en": "The school will {{gap}} all the books.",
+          "ru": "Школа предоставит все книги.",
+          "acceptedAnswers": [
+            "provide"
+          ]
+        },
+        {
+          "id": "b1b2-10-c6",
+          "en": "They {{gap}} food for people in need.",
+          "ru": "Они обеспечивают едой нуждающихся людей.",
+          "acceptedAnswers": [
+            "provide"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-01",
+      "module": 2,
+      "position": 1,
+      "word": "achieve",
+      "ipa": "/əˈtʃiːv/",
+      "translations": [
+        "достигать"
+      ],
+      "recallPrompt": "достигать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "You can achieve your goal with practice.",
+          "ru": "Вы можете достичь своей цели с помощью практики."
+        },
+        {
+          "en": "We hope to achieve better results this year.",
+          "ru": "Мы надеемся достичь лучших результатов в этом году."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-11-c1",
+          "en": "You can {{gap}} your goal with practice.",
+          "ru": "Вы можете достичь своей цели с помощью практики.",
+          "acceptedAnswers": [
+            "achieve"
+          ]
+        },
+        {
+          "id": "b1b2-11-c2",
+          "en": "We hope to {{gap}} better results this year.",
+          "ru": "Мы надеемся достичь лучших результатов в этом году.",
+          "acceptedAnswers": [
+            "achieve"
+          ]
+        },
+        {
+          "id": "b1b2-11-c3",
+          "en": "What do you want to {{gap}} today?",
+          "ru": "Чего вы хотите достичь сегодня?",
+          "acceptedAnswers": [
+            "achieve"
+          ]
+        },
+        {
+          "id": "b1b2-11-c4",
+          "en": "They worked together to {{gap}} success.",
+          "ru": "Они работали вместе, чтобы добиться успеха.",
+          "acceptedAnswers": [
+            "achieve"
+          ]
+        },
+        {
+          "id": "b1b2-11-c5",
+          "en": "It takes time to {{gap}} a good level of English.",
+          "ru": "Требуется время, чтобы достичь хорошего уровня английского.",
+          "acceptedAnswers": [
+            "achieve"
+          ]
+        },
+        {
+          "id": "b1b2-11-c6",
+          "en": "A clear plan helps you {{gap}} more.",
+          "ru": "Чёткий план помогает вам добиться большего.",
+          "acceptedAnswers": [
+            "achieve"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-02",
+      "module": 2,
+      "position": 2,
+      "word": "adapt",
+      "ipa": "/əˈdæpt/",
+      "translations": [
+        "приспосабливаться",
+        "адаптировать"
+      ],
+      "recallPrompt": "приспосабливаться; адаптировать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "It takes time to adapt to a new school.",
+          "ru": "Нужно время, чтобы приспособиться к новой школе."
+        },
+        {
+          "en": "We need to adapt our plans to the weather.",
+          "ru": "Нам нужно адаптировать наши планы к погоде."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-12-c1",
+          "en": "It takes time to {{gap}} to a new school.",
+          "ru": "Нужно время, чтобы приспособиться к новой школе.",
+          "acceptedAnswers": [
+            "adapt"
+          ]
+        },
+        {
+          "id": "b1b2-12-c2",
+          "en": "We need to {{gap}} our plans to the weather.",
+          "ru": "Нам нужно адаптировать наши планы к погоде.",
+          "acceptedAnswers": [
+            "adapt"
+          ]
+        },
+        {
+          "id": "b1b2-12-c3",
+          "en": "Animals must {{gap}} to changes in their environment.",
+          "ru": "Животные должны приспосабливаться к изменениям окружающей среды.",
+          "acceptedAnswers": [
+            "adapt"
+          ]
+        },
+        {
+          "id": "b1b2-12-c4",
+          "en": "She can {{gap}} quickly to new situations.",
+          "ru": "Она может быстро приспосабливаться к новым ситуациям.",
+          "acceptedAnswers": [
+            "adapt"
+          ]
+        },
+        {
+          "id": "b1b2-12-c5",
+          "en": "You may need to {{gap}} the recipe.",
+          "ru": "Возможно, вам потребуется адаптировать рецепт.",
+          "acceptedAnswers": [
+            "adapt"
+          ]
+        },
+        {
+          "id": "b1b2-12-c6",
+          "en": "The team had to {{gap}} to a different schedule.",
+          "ru": "Команде пришлось приспособиться к другому расписанию.",
+          "acceptedAnswers": [
+            "adapt"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-03",
+      "module": 2,
+      "position": 3,
+      "word": "avoid",
+      "ipa": "/əˈvɔɪd/",
+      "translations": [
+        "избегать"
+      ],
+      "recallPrompt": "избегать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "Try to avoid busy roads.",
+          "ru": "Старайтесь избегать оживлённых дорог."
+        },
+        {
+          "en": "We should avoid making the same mistake.",
+          "ru": "Нам следует избегать повторения той же ошибки."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-13-c1",
+          "en": "Try to {{gap}} busy roads.",
+          "ru": "Старайтесь избегать оживлённых дорог.",
+          "acceptedAnswers": [
+            "avoid"
+          ]
+        },
+        {
+          "id": "b1b2-13-c2",
+          "en": "We should {{gap}} making the same mistake.",
+          "ru": "Нам следует избегать повторения той же ошибки.",
+          "acceptedAnswers": [
+            "avoid"
+          ]
+        },
+        {
+          "id": "b1b2-13-c3",
+          "en": "Leave early to {{gap}} the traffic.",
+          "ru": "Выезжайте рано, чтобы избежать пробок.",
+          "acceptedAnswers": [
+            "avoid"
+          ]
+        },
+        {
+          "id": "b1b2-13-c4",
+          "en": "I try to {{gap}} eating too much sugar.",
+          "ru": "Я стараюсь избегать употребления слишком большого количества сахара.",
+          "acceptedAnswers": [
+            "avoid"
+          ]
+        },
+        {
+          "id": "b1b2-13-c5",
+          "en": "Please {{gap}} using your phone in class.",
+          "ru": "Пожалуйста, воздержитесь от использования телефона на занятии.",
+          "acceptedAnswers": [
+            "avoid"
+          ]
+        },
+        {
+          "id": "b1b2-13-c6",
+          "en": "A good plan can help us {{gap}} problems.",
+          "ru": "Хороший план может помочь нам избежать проблем.",
+          "acceptedAnswers": [
+            "avoid"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-04",
+      "module": 2,
+      "position": 4,
+      "word": "challenge",
+      "ipa": "/ˈtʃælɪndʒ/",
+      "translations": [
+        "сложная задача",
+        "вызов"
+      ],
+      "recallPrompt": "сложная задача; вызов",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "Learning to drive was a real challenge.",
+          "ru": "Научиться водить было настоящей сложной задачей."
+        },
+        {
+          "en": "I am ready for a new challenge.",
+          "ru": "Я готов к новой сложной задаче."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-14-c1",
+          "en": "Learning to drive was a real {{gap}}.",
+          "ru": "Научиться водить было настоящей сложной задачей.",
+          "acceptedAnswers": [
+            "challenge"
+          ]
+        },
+        {
+          "id": "b1b2-14-c2",
+          "en": "I am ready for a new {{gap}}.",
+          "ru": "Я готов к новой сложной задаче.",
+          "acceptedAnswers": [
+            "challenge"
+          ]
+        },
+        {
+          "id": "b1b2-14-c3",
+          "en": "The biggest {{gap}} is finding enough time.",
+          "ru": "Самая большая сложность — найти достаточно времени.",
+          "acceptedAnswers": [
+            "challenge"
+          ]
+        },
+        {
+          "id": "b1b2-14-c4",
+          "en": "This project is an exciting {{gap}} for our team.",
+          "ru": "Этот проект — увлекательная сложная задача для нашей команды.",
+          "acceptedAnswers": [
+            "challenge"
+          ]
+        },
+        {
+          "id": "b1b2-14-c5",
+          "en": "Moving abroad can be a {{gap}}.",
+          "ru": "Переезд за границу может стать непростой задачей.",
+          "acceptedAnswers": [
+            "challenge"
+          ]
+        },
+        {
+          "id": "b1b2-14-c6",
+          "en": "She accepted the {{gap}} with confidence.",
+          "ru": "Она с уверенностью приняла вызов.",
+          "acceptedAnswers": [
+            "challenge"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-05",
+      "module": 2,
+      "position": 5,
+      "word": "confident",
+      "ipa": "/ˈkɒnfɪdənt/",
+      "translations": [
+        "уверенный в себе",
+        "уверенный"
+      ],
+      "recallPrompt": "уверенный в себе; уверенный",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "I feel more confident when I practise.",
+          "ru": "Я чувствую себя увереннее, когда практикуюсь."
+        },
+        {
+          "en": "She is confident about the test.",
+          "ru": "Она уверена в себе перед тестом."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-15-c1",
+          "en": "I feel more {{gap}} when I practise.",
+          "ru": "Я чувствую себя увереннее, когда практикуюсь.",
+          "acceptedAnswers": [
+            "confident"
+          ]
+        },
+        {
+          "id": "b1b2-15-c2",
+          "en": "She is {{gap}} about the test.",
+          "ru": "Она уверена в себе перед тестом.",
+          "acceptedAnswers": [
+            "confident"
+          ]
+        },
+        {
+          "id": "b1b2-15-c3",
+          "en": "Be {{gap}} when you speak English.",
+          "ru": "Будьте уверены в себе, когда говорите по-английски.",
+          "acceptedAnswers": [
+            "confident"
+          ]
+        },
+        {
+          "id": "b1b2-15-c4",
+          "en": "He sounds {{gap}} on the phone.",
+          "ru": "По телефону он звучит уверенно.",
+          "acceptedAnswers": [
+            "confident"
+          ]
+        },
+        {
+          "id": "b1b2-15-c5",
+          "en": "We are {{gap}} that the plan will work.",
+          "ru": "Мы уверены, что план сработает.",
+          "acceptedAnswers": [
+            "confident"
+          ]
+        },
+        {
+          "id": "b1b2-15-c6",
+          "en": "The course helps students become more {{gap}}.",
+          "ru": "Курс помогает студентам стать увереннее в себе.",
+          "acceptedAnswers": [
+            "confident"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-06",
+      "module": 2,
+      "position": 6,
+      "word": "determine",
+      "ipa": "/dɪˈtɜːmɪn/",
+      "translations": [
+        "определять",
+        "устанавливать"
+      ],
+      "recallPrompt": "определять; устанавливать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "We need to determine the cause of the problem.",
+          "ru": "Нам нужно определить причину проблемы."
+        },
+        {
+          "en": "The test will determine your level.",
+          "ru": "Тест определит ваш уровень."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-16-c1",
+          "en": "We need to {{gap}} the cause of the problem.",
+          "ru": "Нам нужно определить причину проблемы.",
+          "acceptedAnswers": [
+            "determine"
+          ]
+        },
+        {
+          "id": "b1b2-16-c2",
+          "en": "The test will {{gap}} your level.",
+          "ru": "Тест определит ваш уровень.",
+          "acceptedAnswers": [
+            "determine"
+          ]
+        },
+        {
+          "id": "b1b2-16-c3",
+          "en": "How do you {{gap}} the price?",
+          "ru": "Как вы определяете цену?",
+          "acceptedAnswers": [
+            "determine"
+          ]
+        },
+        {
+          "id": "b1b2-16-c4",
+          "en": "These facts will {{gap}} our next step.",
+          "ru": "Эти факты определят наш следующий шаг.",
+          "acceptedAnswers": [
+            "determine"
+          ]
+        },
+        {
+          "id": "b1b2-16-c5",
+          "en": "We must {{gap}} the exact date first.",
+          "ru": "Сначала мы должны установить точную дату.",
+          "acceptedAnswers": [
+            "determine"
+          ]
+        },
+        {
+          "id": "b1b2-16-c6",
+          "en": "The doctor will {{gap}} which treatment is best.",
+          "ru": "Врач определит, какое лечение лучше всего.",
+          "acceptedAnswers": [
+            "determine"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-07",
+      "module": 2,
+      "position": 7,
+      "word": "establish",
+      "ipa": "/ɪˈstæblɪʃ/",
+      "translations": [
+        "устанавливать",
+        "основывать"
+      ],
+      "recallPrompt": "устанавливать; основывать",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "We need to establish clear rules.",
+          "ru": "Нам нужно установить чёткие правила."
+        },
+        {
+          "en": "They plan to establish a new company.",
+          "ru": "Они планируют основать новую компанию."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-17-c1",
+          "en": "We need to {{gap}} clear rules.",
+          "ru": "Нам нужно установить чёткие правила.",
+          "acceptedAnswers": [
+            "establish"
+          ]
+        },
+        {
+          "id": "b1b2-17-c2",
+          "en": "They plan to {{gap}} a new company.",
+          "ru": "Они планируют основать новую компанию.",
+          "acceptedAnswers": [
+            "establish"
+          ]
+        },
+        {
+          "id": "b1b2-17-c3",
+          "en": "It takes time to {{gap}} trust.",
+          "ru": "Чтобы установить доверие, нужно время.",
+          "acceptedAnswers": [
+            "establish"
+          ]
+        },
+        {
+          "id": "b1b2-17-c4",
+          "en": "Let us {{gap}} a regular meeting time.",
+          "ru": "Давайте установим постоянное время встреч.",
+          "acceptedAnswers": [
+            "establish"
+          ]
+        },
+        {
+          "id": "b1b2-17-c5",
+          "en": "The study will {{gap}} the facts.",
+          "ru": "Исследование установит факты.",
+          "acceptedAnswers": [
+            "establish"
+          ]
+        },
+        {
+          "id": "b1b2-17-c6",
+          "en": "We want to {{gap}} contact with the local team.",
+          "ru": "Мы хотим установить контакт с местной командой.",
+          "acceptedAnswers": [
+            "establish"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-08",
+      "module": 2,
+      "position": 8,
+      "word": "focus",
+      "ipa": "/ˈfəʊkəs/",
+      "translations": [
+        "сосредоточиваться",
+        "фокусироваться"
+      ],
+      "recallPrompt": "сосредоточиваться; фокусироваться",
+      "collocations": [
+        "focus on a task",
+        "focus your attention"
+      ],
+      "examples": [
+        {
+          "en": "Please focus on the main question.",
+          "ru": "Пожалуйста, сосредоточьтесь на главном вопросе."
+        },
+        {
+          "en": "I find it hard to focus in a noisy room.",
+          "ru": "Мне трудно сосредоточиться в шумной комнате."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-18-c1",
+          "en": "Please {{gap}} on the main question.",
+          "ru": "Пожалуйста, сосредоточьтесь на главном вопросе.",
+          "acceptedAnswers": [
+            "focus"
+          ]
+        },
+        {
+          "id": "b1b2-18-c2",
+          "en": "I find it hard to {{gap}} in a noisy room.",
+          "ru": "Мне трудно сосредоточиться в шумной комнате.",
+          "acceptedAnswers": [
+            "focus"
+          ]
+        },
+        {
+          "id": "b1b2-18-c3",
+          "en": "We should {{gap}} on one task at a time.",
+          "ru": "Нам следует сосредоточиваться на одной задаче за раз.",
+          "acceptedAnswers": [
+            "focus"
+          ]
+        },
+        {
+          "id": "b1b2-18-c4",
+          "en": "Try to {{gap}} on what you can change.",
+          "ru": "Попробуйте сосредоточиться на том, что вы можете изменить.",
+          "acceptedAnswers": [
+            "focus"
+          ]
+        },
+        {
+          "id": "b1b2-18-c5",
+          "en": "This lesson will {{gap}} on useful words.",
+          "ru": "Этот урок будет сосредоточен на полезных словах.",
+          "acceptedAnswers": [
+            "focus"
+          ]
+        },
+        {
+          "id": "b1b2-18-c6",
+          "en": "Take a short break so you can {{gap}} again.",
+          "ru": "Сделайте короткий перерыв, чтобы снова сосредоточиться.",
+          "acceptedAnswers": [
+            "focus"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-09",
+      "module": 2,
+      "position": 9,
+      "word": "opportunity",
+      "ipa": "/ˌɒpəˈtjuːnəti/",
+      "translations": [
+        "возможность",
+        "благоприятный случай"
+      ],
+      "recallPrompt": "возможность; благоприятный случай",
+      "collocations": [
+        "take an opportunity",
+        "a great opportunity"
+      ],
+      "examples": [
+        {
+          "en": "This is a great opportunity to learn.",
+          "ru": "Это прекрасная возможность учиться."
+        },
+        {
+          "en": "Thank you for the opportunity to work with you.",
+          "ru": "Спасибо за возможность работать с вами."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-19-c1",
+          "en": "This is a great {{gap}} to learn.",
+          "ru": "Это прекрасная возможность учиться.",
+          "acceptedAnswers": [
+            "opportunity"
+          ]
+        },
+        {
+          "id": "b1b2-19-c2",
+          "en": "Thank you for the {{gap}} to work with you.",
+          "ru": "Спасибо за возможность работать с вами.",
+          "acceptedAnswers": [
+            "opportunity"
+          ]
+        },
+        {
+          "id": "b1b2-19-c3",
+          "en": "I had an {{gap}} to visit London.",
+          "ru": "У меня была возможность посетить Лондон.",
+          "acceptedAnswers": [
+            "opportunity"
+          ]
+        },
+        {
+          "id": "b1b2-19-c4",
+          "en": "Do not miss this {{gap}}.",
+          "ru": "Не упустите эту возможность.",
+          "acceptedAnswers": [
+            "opportunity"
+          ]
+        },
+        {
+          "id": "b1b2-19-c5",
+          "en": "The course gives you an {{gap}} to practise.",
+          "ru": "Курс даёт вам возможность практиковаться.",
+          "acceptedAnswers": [
+            "opportunity"
+          ]
+        },
+        {
+          "id": "b1b2-19-c6",
+          "en": "She is looking for an {{gap}} to travel.",
+          "ru": "Она ищет возможность путешествовать.",
+          "acceptedAnswers": [
+            "opportunity"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b1b2-002-10",
+      "module": 2,
+      "position": 10,
+      "word": "require",
+      "ipa": "/rɪˈkwaɪə/",
+      "translations": [
+        "требовать",
+        "нуждаться в"
+      ],
+      "recallPrompt": "требовать; нуждаться в",
+      "collocations": [],
+      "examples": [
+        {
+          "en": "This job will require some experience.",
+          "ru": "Эта работа потребует некоторого опыта."
+        },
+        {
+          "en": "Some plants require very little water.",
+          "ru": "Некоторым растениям требуется очень мало воды."
+        }
+      ],
+      "clozeItems": [
+        {
+          "id": "b1b2-20-c1",
+          "en": "This job will {{gap}} some experience.",
+          "ru": "Эта работа потребует некоторого опыта.",
+          "acceptedAnswers": [
+            "require"
+          ]
+        },
+        {
+          "id": "b1b2-20-c2",
+          "en": "Some plants {{gap}} very little water.",
+          "ru": "Некоторым растениям требуется очень мало воды.",
+          "acceptedAnswers": [
+            "require"
+          ]
+        },
+        {
+          "id": "b1b2-20-c3",
+          "en": "Do you {{gap}} any help?",
+          "ru": "Вам требуется какая-либо помощь?",
+          "acceptedAnswers": [
+            "require"
+          ]
+        },
+        {
+          "id": "b1b2-20-c4",
+          "en": "The repairs may {{gap}} several days.",
+          "ru": "Ремонт может потребовать нескольких дней.",
+          "acceptedAnswers": [
+            "require"
+          ]
+        },
+        {
+          "id": "b1b2-20-c5",
+          "en": "All visitors {{gap}} a ticket.",
+          "ru": "Всем посетителям требуется билет.",
+          "acceptedAnswers": [
+            "require"
+          ]
+        },
+        {
+          "id": "b1b2-20-c6",
+          "en": "These changes {{gap}} careful planning.",
+          "ru": "Эти изменения требуют тщательного планирования.",
+          "acceptedAnswers": [
+            "require"
+          ]
+        }
+      ]
+    }
+  ]
+}

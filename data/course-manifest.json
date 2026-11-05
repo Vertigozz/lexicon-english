@@ -1,0 +1,17 @@
+{
+  "edition": "2026-11-05.1",
+  "sourceFilename": "english_b1_b2_1000_frequency_words.md",
+  "sourceSha256": "525410012bff152938e02bb4fa3839cd77de9c21c9e11db486c68ac3132e1e0a",
+  "words": 1000,
+  "modules": 100,
+  "originalExamples": 2000,
+  "contexts": 7338,
+  "minContextsPerWord": 6,
+  "maxContextsPerWord": 8,
+  "contextSources": {
+    "tatoeba": 6281,
+    "original": 1057
+  },
+  "packageSha256": "392b792d65d829e1e26ccd9b1f378730215af3dc701d7cb7dea53ab9871da3f0",
+  "selection": "Original dictionary order and all IPA, translations and two examples retained. Tatoeba/ManyThings parallel pairs filtered by length, distinct context and topical suitability, with Russian sense overlap prioritised; manually authored supplements cover shortages. Automated validation and editorial spot checks are not independent linguistic certification."
+}
