@@ -5,7 +5,7 @@ import {mergeStates} from './sync-state.js';
 export function mergeSavedState(current,saved,draft){
   const state=mergeStates(current,saved),session=state.session;
   if(draft?.enabled&&session&&!session.feedback&&
-    draft.sessionId===session.id&&draft.index===session.index&&draft.phase===session.phase&&
+    draft.sessionId===session.id&&draft.index===session.index&&draft.phase===session.phase&&draft.taskId===session.tasks?.[session.index]?.attemptId&&
     ['recall','gaps','enru'].includes(session.phase))session.input=draft.value;
   return state;
 }

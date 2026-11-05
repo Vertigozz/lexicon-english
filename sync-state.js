@@ -1,3 +1,4 @@
+import {reconcileKnownSession} from './known.js';
 // A convergent learning log plus versioned registers for mutable fields.
 // A reset starts a new epoch, so an old offline device cannot resurrect progress.
 const clone = value => structuredClone(value);
@@ -44,7 +45,7 @@ export function stampState(state, previous, device, now=Date.now()) {
 }
 
 export function mergeStates(left,right) {
-  if(!left)return clone(right);if(!right)return clone(left);
+  if(!left)return reconcileKnownSession(clone(right));if(!right)return reconcileKnownSession(clone(left));
   const a=left,b=right,m={clock:Math.max(meta(a).clock||0,meta(b).clock||0)};
   for(const group of ['settings','decks','deletedDecks','epochs']) {
     m[group]={};for(const key of keys(meta(a)[group],meta(b)[group]))m[group][key]=latest(stampFor(a,group,key),stampFor(b,group,key));
@@ -68,7 +69,7 @@ export function mergeStates(left,right) {
   if(session&&(!ids.has(session.deckId)||(session.syncEpoch||zero)!==(m.epochs[session.deckId]||zero)||(session.phase!=='result'&&events.some(e=>e.type==='session_completed'&&e.sessionId===session.id))))session=null;
   let activeDeckId=choose(a.activeDeckId,b.activeDeckId,meta(a).active||zero,meta(b).active||zero);
   if(!ids.has(activeDeckId))activeDeckId=decks[0]?.deck.id;
-  return {...clone(a),version:1,decks,events,settings,session,activeDeckId,sync:m};
+  return reconcileKnownSession({...clone(a),version:1,decks,events,settings,session,activeDeckId,sync:m});
 }
 
 // The built-in 1000-word course is fetched locally instead of uploaded on every answer.

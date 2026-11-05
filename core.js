@@ -20,48 +20,83 @@ export function checkAnswer(answer, accepted) {
 }
 export function shuffle(items) { const a=[...items]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a; }
 export function makeEvent(state,type,data={}) {
-  return {id:uid(),type,at:new Date().toISOString(),date:localDate(state.settings.timeZone),deckId:state.activeDeckId,...data};
+  const clock=Math.max(Date.now(),state.sync?.clock||0,Date.parse(state.events.at(-1)?.at)||0)+1;
+  return {id:uid(),type,at:new Date(clock).toISOString(),date:localDate(state.settings.timeZone),deckId:state.activeDeckId,...data};
 }
 export function appendEvent(state,event) { if(!state.events.some(x=>x.id===event.id)) state.events.push(event); }
 export function derive(state,deckId=state.activeDeckId) {
-  const modules={}, difficult={}, used=new Set(), sessions=[];
-  const get=n=>modules[n] ||= {module:n,stage:-1,d0:null,nextDate:null,lastSuccessDate:null,viewed:false,attempts:[],initialScores:null};
+  const deck=state.decks.find(d=>d.deck.id===deckId),modules={},difficult={},used=new Set(),sessions=[],known=new Set(),wordProgress={},wordModules={};
+  const blank=()=>({stage:-1,d0:null,nextDate:null,lastSuccessDate:null,initialScores:null});
+  for(const w of deck?.words||[]){wordProgress[w.id]=blank();wordModules[w.id]=w.module;}
+  const get=n=>modules[n] ||= {module:n,stage:-1,d0:null,nextDate:null,lastSuccessDate:null,viewed:false,attempts:[],initialScores:null,initialCount:10};
   for(const e of state.events){
     if(e.deckId!==deckId)continue;
     if(e.type==='module_viewed')get(e.module).viewed=true;
     if(e.type==='context_shown')used.add(e.exerciseId);
+    if(e.type==='word_known'&&wordProgress[e.wordId]){
+      get(wordModules[e.wordId]).viewed=true;
+      if(e.known)known.add(e.wordId);
+      else {known.delete(e.wordId);wordProgress[e.wordId]=blank();delete difficult[e.wordId];}
+    }
     if(e.type==='legacy_import'){
-      Object.assign(get(1),{stage:0,d0:'2026-11-04',nextDate:'2026-11-05',lastSuccessDate:'2026-11-04',initialScores:{recall:10,gaps:10},legacy:true});get(2).viewed=true;
+      for(const w of deck.words.filter(w=>w.module===1))Object.assign(wordProgress[w.id],{stage:0,d0:'2026-11-04',nextDate:'2026-11-05',lastSuccessDate:'2026-11-04',initialScores:{recall:10,gaps:10}});
+      Object.assign(get(1),{viewed:true,legacy:true,initialScores:{recall:10,gaps:10}});get(2).viewed=true;
     }
     if(e.type==='session_completed'){
       sessions.push(e);
       if(e.kind==='difficult'){
-        for(const id of e.wordIds){if(e.missed.includes(id))difficult[id]={wordId:id,date:addDays(e.date,1)};else delete difficult[id];} continue;
+        for(const id of e.wordIds){if(e.missed.includes(id))difficult[id]={wordId:id,date:addDays(e.date,1)};else delete difficult[id];}continue;
       }
       if(e.kind==='final')continue;
       const m=get(e.module);m.attempts.push(e);m.viewed=true;
-      if(e.success){
-        if(e.stage!==m.stage+1 || (m.lastSuccessDate===e.date && e.stage>0))continue;
-        m.stage=e.stage;m.lastSuccessDate=e.date;
-        if(e.stage===0){m.d0=e.date;m.initialScores=e.scores;}
-        m.nextDate=e.stage<5?addDays(e.date,INTERVALS[e.stage]):null;
-      } else if(m.stage>=0){m.nextDate=addDays(e.date,1);}
+      if(e.success&&e.stage===0){m.initialScores=e.scores;m.initialCount=e.count||e.wordIds.length;}
+      for(const id of e.wordIds){
+        const w=wordProgress[id];if(!w)continue;
+        if(e.success){
+          if(e.stage!==w.stage+1||(w.lastSuccessDate===e.date&&e.stage>0))continue;
+          w.stage=e.stage;w.lastSuccessDate=e.date;
+          if(e.stage===0){w.d0=e.date;w.initialScores=e.scores;}
+          w.nextDate=e.stage<5?addDays(e.date,INTERVALS[e.stage]):null;
+        }else if(w.stage>=0)w.nextDate=addDays(e.date,1);
+      }
       for(const id of e.missed)difficult[id]={wordId:id,date:addDays(e.date,1)};
     }
   }
-  return {modules,difficult,used,sessions};
+  const min=values=>values.length?values.sort()[0]:null,max=values=>values.length?values.sort().at(-1):null;
+  for(const n of new Set((deck?.words||[]).map(w=>w.module))){
+    const all=deck.words.filter(w=>w.module===n),active=all.filter(w=>!known.has(w.id)),ps=active.map(w=>wordProgress[w.id]);
+    if(!modules[n]&&!all.some(w=>known.has(w.id)||wordProgress[w.id].stage>=0))continue;
+    const m=get(n);m.knownCount=all.length-active.length;m.activeCount=active.length;m.knownOnly=active.length===0;m.covered=all.every(w=>known.has(w.id)||wordProgress[w.id].stage>=0);
+    m.stage=ps.length?Math.min(...ps.map(w=>w.stage)):-1;
+    m.d0=m.stage>=0?max(ps.map(w=>w.d0).filter(Boolean)):null;
+    m.lastSuccessDate=max(ps.map(w=>w.lastSuccessDate).filter(Boolean));
+    m.nextDate=min(ps.map(w=>w.nextDate).filter(Boolean));
+  }
+  for(const id of known)delete difficult[id];
+  return {modules,difficult,used,sessions,known,wordProgress};
 }
 export function reviewQueue(state,date=localDate(state.settings.timeZone),deckId=state.activeDeckId) {
-  return Object.values(derive(state,deckId).modules).filter(m=>m.stage>=0&&m.stage<5&&m.nextDate<=date&&m.lastSuccessDate!==date).sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||a.module-b.module);
+  const deck=state.decks.find(d=>d.deck.id===deckId),p=derive(state,deckId),groups=new Map();
+  for(const w of deck?.words||[]){
+    const x=p.wordProgress[w.id];if(p.known.has(w.id)||x.stage<0||x.stage>=5||x.nextDate>date||x.lastSuccessDate===date)continue;
+    const key=w.module+':'+x.stage;
+    if(!groups.has(key))groups.set(key,{...p.modules[w.module],module:w.module,stage:x.stage,nextDate:x.nextDate,wordIds:[],count:0});
+    const group=groups.get(key);group.wordIds.push(w.id);group.count++;if(x.nextDate<group.nextDate)group.nextDate=x.nextDate;
+  }
+  return [...groups.values()].sort((a,b)=>a.nextDate.localeCompare(b.nextDate)||a.module-b.module||a.stage-b.stage);
 }
 export function nextModule(state,deckId=state.activeDeckId) {
   const deck=state.decks.find(d=>d.deck.id===deckId),p=derive(state,deckId);
   const numbers=[...new Set(deck.words.map(w=>w.module))].sort((a,b)=>a-b);
-  return numbers.find(n=>(p.modules[n]?.stage??-1)<0&&deck.words.filter(w=>w.module===n).length===10)??null;
+  return numbers.find(n=>{const words=deck.words.filter(w=>w.module===n);return words.length===10&&words.some(w=>!p.known.has(w.id)&&p.wordProgress[w.id].stage<0);})??null;
+}
+export function learningTotals(state,p=derive(state),deckId=state.activeDeckId){
+  const words=state.decks.find(d=>d.deck.id===deckId)?.words||[];
+  return {learnedWords:words.filter(w=>p.known.has(w.id)||p.wordProgress[w.id].stage>=0).length,knownWords:words.filter(w=>p.known.has(w.id)).length,masteredWords:words.filter(w=>!p.known.has(w.id)&&p.wordProgress[w.id].stage===5).length};
 }
 export function selectContext(word,used) { return word.clozeItems.find(c=>!used.has(c.id)) || word.clozeItems[0]; }
-export function resolveOutcome(progress,stage,scores,date) {
-  const success=scores.recall>=8&&scores.gaps>=8;
+export function resolveOutcome(progress,stage,scores,date,count=10) {
+  const required=Math.ceil(count*.8),success=count>0&&scores.recall>=required&&scores.gaps>=required;
   if(progress?.lastSuccessDate===date && stage>0)throw new Error('Этот модуль уже успешно повторён сегодня.');
   if(stage!==(progress?.stage??-1)+1)throw new Error('Этап уже изменился. Обновите очередь.');
   return {success,nextDate:success?(stage<5?addDays(date,INTERVALS[stage]):null):(stage>0?addDays(date,1):null)};
@@ -122,9 +157,10 @@ export function validateBackup(value) {
   else try{localDate(s.settings.timeZone);}catch{errors.push('Неизвестный часовой пояс.');}
   if(!Array.isArray(s.events)||s.events.length>500000)errors.push('Некорректный журнал событий.');
   else {
-    const ids=new Set();const types=['module_viewed','context_shown','session_started','attempt','session_completed','deck_imported','legacy_import'];
+    const ids=new Set();const types=['module_viewed','context_shown','session_started','attempt','session_completed','deck_imported','legacy_import','word_known'];
     for(const e of s.events){
       if(!e||typeof e.id!=='string'||ids.has(e.id)||!types.includes(e.type)||!deckIds.has(e.deckId)||!isDate(e.date)||typeof e.at!=='string'||isNaN(Date.parse(e.at))){errors.push('Некорректное или повторное событие журнала.');break;} ids.add(e.id);
+      if(e.type==='word_known'&&(typeof e.known!=='boolean'||!Number.isInteger(e.module)||!s.decks.find(d=>d.deck.id===e.deckId)?.words.some(w=>w.id===e.wordId))){errors.push('Повреждена отметка знакомого слова.');break;}
       if(e.type==='session_completed'&&(!Array.isArray(e.missed)||!Array.isArray(e.wordIds)||!['initial','review','difficult','final'].includes(e.kind)||typeof e.success!=='boolean'||!e.scores||!Number.isFinite(e.scores.recall)||!Number.isFinite(e.scores.gaps)||(e.kind!=='difficult'&&e.kind!=='final'&&(!Number.isInteger(e.module)||!Number.isInteger(e.stage)||e.stage<0||e.stage>5)))){errors.push('Повреждён результат учебной сессии.');break;}
       if((e.type==='module_viewed'&&!Number.isInteger(e.module))||(e.type==='context_shown'&&typeof e.exerciseId!=='string')||(e.type==='attempt'&&(typeof e.wordId!=='string'||typeof e.correct!=='boolean'||typeof e.answer!=='string'))){errors.push('Повреждено учебное событие.');break;}
     }

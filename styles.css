@@ -17,3 +17,5 @@
 
 /* Account and cloud status */
 .cloud-panel{grid-column:1/-1}.cloud-panel form{max-width:480px}.cloud-panel .button-row{margin-top:18px}.account-email{font-weight:650;overflow-wrap:anywhere}.auth-message{min-height:1.4em;color:var(--text)}[hidden]{display:none!important}footer #save-state{white-space:normal}.cloud-panel input{box-sizing:border-box;max-width:100%}
+
+.known-word-action{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:20px 0}.known-word-action small{flex-basis:100%;text-align:center;line-height:1.5;color:var(--muted)}
