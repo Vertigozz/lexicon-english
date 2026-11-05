@@ -46,7 +46,7 @@ async function save(schedule=true){
   finally{cloudStatus.saving=false;paintCloudStatus();}
 }
 let recoveryShown=false;
-function showPasswordReset(){if(recoveryShown)return;recoveryShown=true;showModal('Новый пароль','<form id="new-password-form"><label class="field-label" for="new-password">Новый пароль · минимум 8 символов</label><input id="new-password" class="neo-input full" type="password" autocomplete="new-password" minlength="8" required><button class="btn primary" type="submit">Сохранить пароль</button><p id="auth-message" role="status"></p></form>');}
+function showPasswordReset(){if($('#new-password-form'))return;recoveryShown=true;showModal('Новый пароль','<form id="new-password-form"><label class="field-label" for="new-password">Новый пароль · минимум 8 символов</label><input id="new-password" class="neo-input full" type="password" autocomplete="new-password" minlength="8" required><button class="btn primary" type="submit">Сохранить пароль</button><p id="auth-message" role="status"></p></form>');}
 async function startCloud(){
   cloud=new CloudSync({catalog:()=>bundledCatalog,read:readState,write:writeState,recovery:showPasswordReset,
     status:(mode,at,error)=>{Object.assign(cloudStatus,{mode,at:at||cloudStatus.at,error:error||''});paintCloudStatus();},
@@ -74,6 +74,7 @@ async function startCloud(){
 function authMessage(message){const el=$('#auth-message');if(el)el.textContent=message;else toast(message);}
 async function cloudAction(action,button){
   if(!configured||!cloud?.client){toast('Облачное сохранение ещё не подключено.');return;}
+  if(action==='cloud-password'){showPasswordReset();return;}
   if(button)button.disabled=true;
   try{
     if(action==='cloud-login'||action==='cloud-signup'){
