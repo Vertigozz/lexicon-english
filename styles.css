@@ -262,3 +262,7 @@ a.btn { text-decoration: none; }
   transform: rotate(45deg);
   pointer-events: none;
 }
+.stats-layout > .neo { min-width: 0; }
+@media (max-width: 380px) {
+  .chart-panel .bar-chart { gap: 2px; }
+}
