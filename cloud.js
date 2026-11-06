@@ -30,6 +30,10 @@ export class CloudSync {
     const {data,error}=await this.client.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
     if(error)throw error;if(data.session)await this.setUser(data.user);return Boolean(data.session);
   }
+  async resendSignup(email){
+    const {error}=await this.client.auth.resend({type:'signup',email,options:{emailRedirectTo:location.origin+location.pathname}});
+    if(error)throw error;
+  }
   async resetPassword(email){const {error}=await this.client.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'?reset-password=1'});if(error)throw error;}
   async updatePassword(password){const {error}=await this.client.auth.updateUser({password});if(error)throw error;}
   async logout(){await this.sync(true);const {error}=await this.client.auth.signOut({scope:'local'});if(error)throw error;await this.setUser(null);}

@@ -6,9 +6,10 @@ import {stampState,mergeStates} from './sync-state.js';
 import {mergeSavedState} from './session-draft.js';
 import {setWordKnown,reconcileKnownSession,sessionScores} from './known.js';
 import {CloudSync,configured} from './cloud.js';
-import {accountPanel,statusText} from './account-panel.js';
+import {accountPanel,statusText,registrationForm} from './account-panel.js';
 import {CATALOG_ID,CATALOG_URL,installCatalog,finishPendingCatalogActivation} from './catalog.js';
 import {copy,contextSources,courseSourcesHTML} from './credits.js';
+import {cloudConfig} from './cloud-config.js';
 let bundledCatalog,cloud,accountUser=null,scope='guest',lastSaved=null,guestAvailable=false;
 const cloudStatus={mode:'guest',at:null,error:'',saving:false,localError:false};
 let deviceId;try{deviceId=localStorage.getItem('lexicon-device-id')||crypto.randomUUID();localStorage.setItem('lexicon-device-id',deviceId);}catch{deviceId=crypto.randomUUID();}
@@ -20,7 +21,10 @@ const day=n=>`Day ${String(n).padStart(3,'0')}`;
 const btn=(label,action,cls='',extra='')=>`<button class="btn ${cls}" data-action="${action}" ${extra}>${label}</button>`;
 const badge=(text,type='')=>`<span class="badge ${type}">${text}</span>`;
 let sharedDecks,catalogError='',catalogRefreshing=false;
-let state,route=location.hash.slice(1)||'dashboard',storageError='',filters={search:'',module:'',status:'all'},pendingImport=null,saveTimer,toastTimer;
+const authHash=new URLSearchParams(location.hash.slice(1)),authQuery=new URLSearchParams(location.search);
+const emailLinkError=authHash.has('error_code')||authQuery.has('error_code');
+const emailConfirmed=authHash.get('type')==='signup'&&authHash.has('access_token');
+let state,route=emailConfirmed||emailLinkError?'settings':location.hash.slice(1)||'dashboard',storageError='',filters={search:'',module:'',status:'all'},pendingImport=null,saveTimer,toastTimer;
 const deck=()=>state.decks.find(d=>d.deck.id===state.activeDeckId);
 const today=()=>localDate(state.settings.timeZone);
 let progressCache;
@@ -71,6 +75,11 @@ async function startCloud(){
     }
   });
   try{await cloud.start();}catch(error){cloudStatus.mode='error';cloudStatus.error='Не удалось подключить аккаунт. Локальные результаты сохранены. '+error.message;paintCloudStatus();}
+  if(emailConfirmed||emailLinkError){
+    history.replaceState(null,'',location.pathname+'#settings');route='settings';render();
+    if(emailLinkError)authMessage('Ссылка недействительна или устарела. Если вы уже подтвердили почту, войдите; иначе запросите новое письмо.');
+    else authMessage(accountUser?'Почта подтверждена. Прогресс привязан к вашему аккаунту.':'Войдите с почтой и паролем, которые указали при регистрации.');
+  }
   if(new URLSearchParams(location.search).has('reset-password')&&accountUser){
     showPasswordReset();
   }
@@ -88,14 +97,13 @@ async function cloudAction(action,button){
   if(action==='cloud-password'){showPasswordReset();return;}
   if(button)button.disabled=true;
   try{
-    if(action==='cloud-login'||action==='cloud-signup'){
+    if(action==='cloud-login'){
       const form=$('#cloud-auth-form');if(!form?.reportValidity())return;
       const email=$('#account-email').value.trim(),password=$('#account-password').value;
       authMessage('Подключаем аккаунт…');
-      if(action==='cloud-login'){await cloud.login(email,password);toast('Аккаунт подключён. Прогресс синхронизируется.');}
-      else {const signedIn=await cloud.signup(email,password);authMessage(signedIn?'Аккаунт подключён.':'Проверьте почту: подтвердите адрес, затем войдите с этим паролем.');}
+      await cloud.login(email,password);toast('Аккаунт подключён. Прогресс синхронизируется.');
     }
-    if(action==='cloud-forgot'){
+    if(action==='cloud-forgot'&&cloudConfig.emailsConfigured){
       const input=$('#account-email');if(!input.reportValidity()||!input.value.trim())return;
       await cloud.resetPassword(input.value.trim());authMessage('Ссылка для смены пароля отправлена на почту.');
     }
@@ -110,6 +118,22 @@ async function cloudAction(action,button){
     const messages={'Invalid login credentials':'Проверьте почту и пароль.','Email not confirmed':'Подтвердите адрес по ссылке из письма.','User already registered':'Такой аккаунт уже есть. Нажмите «Войти».','Email rate limit exceeded':'Слишком много писем. Попробуйте позже.'};
     authMessage(messages[error.message]||'Не удалось подключиться. '+error.message);
   }finally{if(button?.isConnected)button.disabled=false;}
+}
+async function sendRegistration(form,resend=false){
+  if(!cloudConfig.emailsConfigured||!cloud?.client||accountUser||!form||form.dataset.sending)return;
+  const email=form.querySelector('#registration-email'),password=form.querySelector('#registration-password'),message=form.querySelector('#registration-message');
+  if(!(resend?email.reportValidity():form.reportValidity()))return;
+  const buttons=[...form.querySelectorAll('button')];form.dataset.sending='true';buttons.forEach(button=>button.disabled=true);
+  message.textContent='Запрашиваем письмо…';
+  try{
+    if(resend)await cloud.resendSignup(email.value.trim());
+    else if(await cloud.signup(email.value.trim(),password.value))return;
+    password.value='';
+    message.textContent='Проверьте почту и папку «Спам». Если адрес ещё не подтверждён, вы получите ссылку. После подтверждения войдите с вашим паролем.';
+  }catch(error){
+    const messages={over_email_send_rate_limit:'Слишком много запросов на отправку. Попробуйте позже.',over_request_rate_limit:'Слишком много запросов. Попробуйте позже.',weak_password:'Выберите более надёжный пароль.',signup_disabled:'Регистрация временно недоступна.',email_address_not_authorized:'Письмо не отправлено. Регистрация по почте временно недоступна.'};
+    message.textContent=messages[error.code]||'Не удалось отправить письмо. Проверьте адрес и попробуйте позже.';
+  }finally{delete form.dataset.sending;buttons.forEach(button=>button.disabled=false);}
 }
 function log(type,data){appendEvent(state,makeEvent(state,type,data));}
 function navigate(next){route=next;location.hash=next;render();window.scrollTo({top:0,behavior:'instant'});}
@@ -214,6 +238,8 @@ async function startFinal(){const p=progress(),numbers=[...new Set(deck().words.
 function render(){document.documentElement.dataset.theme=state.settings.theme;const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage};$('#app').innerHTML=shell(deckBar()+(pages[route]||dashboard)());if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());}
 async function actions(action,el){
   if(action==='close')return closeModal();
+  if(action==='open-registration'&&cloudConfig.emailsConfigured&&!accountUser)return showModal('Регистрация',registrationForm($('#account-email')?.value));
+  if(action==='resend-registration')return sendRegistration(el.closest('form'),true);
   if(action==='refresh-decks')return refreshDecks();
   if(action==='rename-deck'){if(!sharedDecks?.admin)throw new Error('Требуются права администратора.');return showModal('Переименовать колоду',`<label for="deck-title">Название для всех пользователей</label><input id="deck-title" class="neo-input full" maxlength="200" value="${esc(deck().deck.title)}">${btn('Сохранить название','save-deck-title','primary full')}`);}
   if(action==='save-deck-title'){const title=$('#deck-title').value.trim();const pkg=structuredClone(sharedDecks?.rows.find(r=>r.id===state.activeDeckId)?.package||deck());pkg.deck.title=title;await sharedDecks.publish(pkg);installSharedDecks(state,sharedDecks.rows);await save();closeModal();render();return toast('Название колоды обновлено для всех пользователей.');}
@@ -265,7 +291,7 @@ async function actions(action,el){
   if(action==='help')return showModal('Десять слов. Пять повторений.',`<div class="help-steps"><div><span>01</span><section><h3>Познакомьтесь</h3><p>10 слов, транскрипции, переводы и живые примеры.</p></section></div><div><span>02</span><section><h3>Вспомните сами</h3><p>Переведите с русского на английский и заполните пропуски. Нужны 80% отдельно в каждом упражнении. «Уже знаю» исключает слово из урока и SRS; новые слова взамен не добавляются.</p></section></div><div><span>03</span><section><h3>Возвращайтесь к знакомому</h3><p>Повторяйте через 1, 2, 4, 7 и 16 дней после предыдущего успешного этапа. Пропуски сдвигают план, а не обнуляют его.</p></section></div></div><div class="notice">Без аккаунта прогресс хранится в этом браузере. Войдите в настройках, чтобы продолжать занятия на других устройствах. Резервную копию можно скачать в любое время.</div>`);
 }
 document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(el&&!el.disabled){e.preventDefault();actions(el.dataset.action,el).catch(err=>{console.error(err);toast('Не удалось выполнить действие. '+err.message);});}if(e.target.classList.contains('modal-backdrop'))closeModal();});
-document.addEventListener('submit',e=>{if(e.target.id==='new-password-form'){e.preventDefault();const form=e.target,button=form.querySelector('button');button.disabled=true;cloud.updatePassword($('#new-password').value).then(()=>{history.replaceState(null,'',location.pathname+'#settings');closeModal();toast('Пароль обновлён.');}).catch(err=>authMessage(err.message)).finally(()=>button.disabled=false);return;}if(e.target.id==='cloud-auth-form'){e.preventDefault();cloudAction('cloud-login',e.target.querySelector('button')).catch(err=>authMessage(err.message));return;}if(e.target.id==='answer-form'){e.preventDefault();if(state.session?.feedback)nextQuestion();else checkCurrent();}});
+document.addEventListener('submit',e=>{if(e.target.id==='registration-form'){e.preventDefault();sendRegistration(e.target);return;}if(e.target.id==='new-password-form'){e.preventDefault();const form=e.target,button=form.querySelector('button');button.disabled=true;cloud.updatePassword($('#new-password').value).then(()=>{history.replaceState(null,'',location.pathname+'#settings');closeModal();toast('Пароль обновлён.');}).catch(err=>authMessage(err.message)).finally(()=>button.disabled=false);return;}if(e.target.id==='cloud-auth-form'){e.preventDefault();cloudAction('cloud-login',e.target.querySelector('button')).catch(err=>authMessage(err.message));return;}if(e.target.id==='answer-form'){e.preventDefault();if(state.session?.feedback)nextQuestion();else checkCurrent();}});
 document.addEventListener('input',e=>{if(e.target.id==='answer'){const a=state.session;if(!a)return;a.input=e.target.value;try{localStorage.setItem('lexicon-draft',JSON.stringify({sessionId:a.id,index:a.index,taskId:a.tasks[a.index]?.attemptId,phase:a.phase,input:a.input}));}catch{}clearTimeout(saveTimer);saveTimer=setTimeout(save,250);}if(e.target.id==='word-search'){filters.search=e.target.value;$('#word-list').innerHTML=wordList();}});
 document.addEventListener('change',async e=>{const el=e.target;try{if(el.id==='import-file')await previewImport(el.files[0]);if(el.id==='restore-file')await previewRestore(el.files[0]);if(el.id==='module-filter'){filters.module=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='status-filter'){filters.status=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='timezone'){state.settings.timeZone=el.value;await save();render();toast('Часовой пояс обновлён.');}if(el.id==='reminder'){state.settings.reminder=el.value;await save();toast('Время занятий сохранено.');}if((el.id==='deck-select'||el.id==='catalog-deck-select')){if(state.session&&state.session.phase!=='result'){render();toast('Сначала завершите текущую тренировку.');return;}state.session=null;state.activeDeckId=el.value;filters={search:'',module:'',status:'all'};await save();render();}}catch(err){toast(err.message);}});
 document.addEventListener('keydown',e=>{const modal=$('[role="dialog"]');if(modal){if(e.key==='Escape')closeModal();if(e.key==='Tab'){const els=[...modal.querySelectorAll('button:not(:disabled),a[href],input,select,summary,[tabindex="0"]')].filter(x=>x.getClientRects().length),first=els[0],last=els.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}return;}if(e.key==='Enter'&&route==='study'&&state.session?.feedback&&e.target.tagName!=='BUTTON'){e.preventDefault();nextQuestion();}});
