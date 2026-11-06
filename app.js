@@ -105,9 +105,7 @@ async function refreshDecks(redraw=true){
 const formatCount=value=>new Intl.NumberFormat('ru-RU').format(value);
 function deckLabel(d){
   const count=formatCount(d.words.length);
-  const suffix=d.deck.title.match(/\s*·\s*([\d\s]+)\s+(?:популярных\s+)?слов$/u);
-  const title=suffix&&Number(suffix[1].replace(/\s/g,''))===d.words.length
-    ?d.deck.title.slice(0,suffix.index):d.deck.title;
+  const title=d.deck.title.replace(/\s*·\s*[\d\s]+\s+слов$/u,'');
   return `${title} · ${count} слов`;
 }
 function deckOptions(){
@@ -123,7 +121,7 @@ function deckBar(){
       <span class="active-deck-name" aria-hidden="true">${esc(deckLabel(deck()))}</span>
     </div>
     ${accountUser?`<details class="catalog-actions"><summary>Каталог</summary><div class="catalog-panel">
-      ${btn('Обновить каталог','refresh-decks','subtle small')}${sharedDecks?.admin?btn('Загрузить JSON-колоду','import','subtle small')+btn('Переименовать','rename-deck','subtle small'):''}
+      ${btn('Обновить каталог','refresh-decks','subtle small')}${sharedDecks?.admin?btn('Переименовать','rename-deck','subtle small'):''}
     </div></details>`:'<a class="catalog-login" href="#settings">Войти в общий каталог</a>'}
     ${active?'<small>Чтобы сменить колоду, завершите текущую тренировку.</small>':''}
     <small id="catalog-status" role="status" ${catalogError?'':'hidden'}>${esc(catalogError)}</small>
@@ -184,68 +182,27 @@ function shell(body){const titles={dashboard:'Обзор',today:'Сегодня'
   return `${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span class="breadcrumb-prefix">Моё пространство</span> ${icon('chevron')} <span>${titles[route]||'Обзор'}</span></div><div class="top-actions"><span class="local-pill">${icon('lock')} Личное пространство</span><button class="icon-btn" data-action="theme" aria-label="${state.settings.theme==='dark'?'Светлая':'Тёмная'} тема">${icon(state.settings.theme==='dark'?'sun':'moon')}</button><button class="icon-btn" data-action="notifications" aria-label="Очередь повторений">${icon('bell')}${reviewQueue(state).length?'<i class="notification-dot"></i>':''}</button><a href="#settings" class="profile-link" aria-label="Настройки профиля">${icon('settings')}<span>Настройки</span></a></div></header><main id="content" tabindex="-1">${storageError?`<div class="notice error">${icon('info')}${esc(storageError)} ${btn('Скачать копию','backup','small')}</div>`:''}${!navigator.onLine?'<div class="notice">Вы офлайн. Слова и прогресс доступны на этом устройстве.</div>':''}${body}</main><footer><span>Lexicon · Пространство для роста</span><span>${icon('check')} <span id="save-state">${esc(statusText(cloudStatus,accountUser))}</span></span></footer></div>`;
 }
 function heading(title,sub,action=''){return `<div class="page-heading"><div><div class="eyebrow">${esc(new Intl.DateTimeFormat('ru',{weekday:'long',day:'numeric',month:'long',timeZone:state.settings.timeZone}).format(new Date()))}</div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div>${action}</div>`;}
-let calendarOffset=0;
-const monthName=new Intl.DateTimeFormat('ru',{month:'long',year:'numeric',timeZone:'UTC'});
-const fullDate=new Intl.DateTimeFormat('ru',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
-const dateObject=date=>new Date(date+'T12:00:00Z');
-function calendar(){
-  const current=today(),date=dateObject(current);
-  const first=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+calendarOffset,1));
-  const year=first.getUTCFullYear(),month=first.getUTCMonth();
-  const leading=(first.getUTCDay()+6)%7,days=new Date(Date.UTC(year,month+1,0)).getUTCDate();
-  const activity=new Map();
-  for(const session of progress().sessions)activity.set(session.date,(activity.get(session.date)||0)+1);
-  let activeDays=0,sessions=0;
-  const cells=Array.from({length:days},(_,i)=>{
-    const iso=addDays(first.toISOString().slice(0,10),i),count=activity.get(iso)||0,isToday=iso===current;
-    if(count){activeDays++;sessions+=count;}
-    const label=`${fullDate.format(dateObject(iso))}${isToday?' · сегодня':''} · ${count?'занятий: '+formatCount(count):'без занятий'}`;
-    return `<time datetime="${iso}" class="calendar-day${isToday?' is-today':''}${count?' has-activity':''}" title="${esc(label)}"${isToday?' aria-current="date"':''}><span aria-hidden="true">${i+1}</span><span class="sr-only">${esc(label)}</span></time>`;
-  }).join('');
-  return `<section class="neo calendar" id="activity-calendar" aria-labelledby="calendar-title">
-    <h2 id="calendar-title">Календарь активности</h2>
-    <div class="calendar-controls">
-      ${btn(icon('chevron','back-icon'),'calendar-month','icon-btn','data-direction="-1" aria-label="Предыдущий месяц"')}
-      <h3 class="calendar-month" aria-live="polite">${esc(monthName.format(first))}</h3>
-      ${btn(icon('chevron'),'calendar-month','icon-btn',`data-direction="1" aria-label="Следующий месяц" ${calendarOffset===0?'disabled':''}`)}
-    </div>
-    <p class="calendar-summary">${sessions?`Дней с занятиями: <strong>${formatCount(activeDays)}</strong> · занятий: <strong>${formatCount(sessions)}</strong>`:'В этом месяце ещё нет занятий.'}</p>
-    <div class="calendar-grid" aria-label="Дни месяца">
-      ${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>`<span class="weekday" aria-hidden="true">${x}</span>`).join('')}
-      ${'<span aria-hidden="true"></span>'.repeat(leading)}${cells}
-    </div>
-    <div class="calendar-legend"><span><i class="legend-dot" aria-hidden="true"></i> День с занятием</span><span><i class="legend-today" aria-hidden="true"></i> Сегодня</span></div>
-  </section>`;
+function progressRing(value,label,sub){return `<div class="progress-ring" role="progressbar" aria-label="${esc(sub)}" aria-valuenow="${Math.round(value)}" aria-valuetext="${esc(label)}" style="--progress:${Math.max(0,Math.min(100,value))*3.6}deg"><div class="ring-center" aria-hidden="true"><strong>${label}</strong><span>${sub}</span></div></div>`;}
+function calendar(){const date=today(),d=new Date(`${date}T12:00:00Z`),year=d.getUTCFullYear(),month=d.getUTCMonth(),first=new Date(Date.UTC(year,month,1)),offset=(first.getUTCDay()+6)%7,days=new Date(Date.UTC(year,month+1,0)).getUTCDate(),sessions=progress().sessions,active=new Set(sessions.map(e=>e.date));
+  return `<section class="neo calendar"><div class="panel-title"><h2>Календарь активности</h2>${icon('calendar')}</div><div class="calendar-month">${esc(new Intl.DateTimeFormat('ru',{month:'long',year:'numeric',timeZone:'UTC'}).format(d))}</div><div class="calendar-grid">${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(x=>`<span class="weekday">${x}</span>`).join('')}${Array.from({length:offset},()=>'<span></span>').join('')}${Array.from({length:days},(_,i)=>{const v=`${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;return `<span class="calendar-day ${v===date?'is-today':''} ${active.has(v)?'has-activity':''}" title="${v}${active.has(v)?' · занятие':''}" ${v===date?'aria-current="date"':''}>${i+1}</span>`;}).join('')}</div><div class="calendar-legend"><span class="legend-dot"></span> Занятие <span class="legend-dot current"></span> Сегодня</div></section>`;
 }
 function miniModule(n){const m=progress().modules[n],loaded=wordsOf(n).length===10,status=m?.knownOnly?'Уже известно':m?.stage===5?'Завершён':m?.stage>=0?`R${m.stage+1} · ${fmt(m.nextDate)}`:m?.viewed?'В процессе':loaded?(nextModule(state)===n?'Следующий модуль':'Доступен предпросмотр'):'Ожидает слов';return `<button class="module-mini ${m?.stage>=0||m?.knownOnly?'done':''} ${nextModule(state)===n?'next':''}" data-action="module" data-module="${n}"><span>${String(n).padStart(2,'0')}</span>${m?.stage>=0||m?.knownOnly?icon('check'):nextModule(state)===n?icon('book'):icon('lock')}<small>${status}</small></button>`;}
-function dashboard(){
-  const s=stats(),n=nextModule(state),total=deck().words.length,modules=new Set(deck().words.map(w=>w.module)).size;
-  const pending=state.session&&state.session.phase!=='result',hardDue=s.hard.filter(x=>x.date<=today()).length,reviewCount=s.q.length+hardDue;
+function dashboard(){const s=stats(),n=nextModule(state),ratio=deck().words.length?s.learnedWords/deck().words.length*100:0,ready=s.q.length>0,hardDue=s.hard.filter(x=>x.date<=today()).length,next=s.q[0];
+  const pending=state.session&&state.session.phase!=='result',reviewCount=s.q.length+hardDue;
   const primary=pending?['Продолжить тренировку','resume','Продолжим с сохранённого места.']:
     reviewCount?['Начать повторение','reviews',`Задач на сегодня: ${formatCount(reviewCount)}.`]:
     n?['Начать тренировку','new',`${day(n)} · новых слов: ${wordsOf(n).filter(w=>!s.p.known.has(w.id)&&s.p.wordProgress[w.id].stage<0).length}.`]:null;
-  return `${heading('Английский в вашем ритме','')}
-  <div class="dashboard-layout"><div class="dashboard-main">
-  <section class="neo hero">
-    <div class="hero-copy"><p class="hero-kicker">Ваш следующий шаг</p>
-      <h2>${pending?'Продолжите занятие':reviewCount?'Время повторить':n?'Следующее занятие':'Все новые слова изучены'}</h2>
+  return `${heading('Английский в вашем ритме','',sharedDecks?.admin?btn(`${icon('upload')} Загрузить колоду`,'import','subtle'):'')}
+  <div class="dashboard-layout"><div class="dashboard-main"><section class="neo hero">
+    <div class="hero-copy"><h2>${pending?'Продолжите занятие':reviewCount?'Время повторить':n?'Следующее занятие':'Все новые слова изучены'}</h2>
       <p>${primary?.[2]||'Даты следующих повторений есть в плане.'}</p>
       <div class="hero-actions">${primary?btn(primary[0]+' '+icon('arrow'),primary[1],'primary'):'<a class="btn primary" href="#today">Открыть план</a>'}</div>
     </div>
+    ${progressRing(ratio,`${formatCount(s.learnedWords)} из ${formatCount(deck().words.length)}`,'Изучено слов')}
   </section>
-  ${deckBar()}
-  <section class="overview-progress" aria-labelledby="overview-progress-title">
-    <div class="section-title"><h2 id="overview-progress-title">Прогресс по колоде</h2><a href="#statistics">Статистика ${icon('arrow')}</a></div>
-    <dl class="overview-metrics">
-      <div><dt>Изучено слов</dt><dd><strong>${formatCount(s.learnedWords)}</strong> <span>из ${formatCount(total)}</span></dd>
-        <dd class="overview-note">В том числе «Уже знаю»: ${formatCount(s.knownWords)}</dd></div>
-      <div><dt>Повторения сегодня</dt><dd><strong>${formatCount(s.due)}</strong></dd>
-        <dd class="overview-note">${s.overdue?'Просрочено: '+formatCount(s.overdue):'Просроченных нет'}</dd></div>
-      <div><dt>Модулей изучено</dt><dd><strong>${formatCount(s.learned)}</strong> <span>из ${formatCount(modules)}</span></dd>
-        <dd class="overview-note">Полный цикл R1–R5: ${formatCount(s.mastered)}</dd></div>
-    </dl>
-  </section>
-  <section class="neo roadmap-preview"><div class="panel-title"><div><h2>Путь к ${deck().words.length} словам</h2><p>Один модуль. Десять слов. Ещё немного уверенности.</p></div><a class="text-link" href="#roadmap">Вся карта ${icon('arrow')}</a></div><div class="mini-modules">${Array.from({length:10},(_,i)=>miniModule(i+1)).join('')}</div><div class="roadmap-caption"><span><i class="dot blue-dot"></i> Следующий модуль</span><span><i class="dot"></i> Впереди</span><span class="caption-right">${formatCount(s.learned)} из ${formatCount(modules)} модулей</span></div></section>
+  <div class="stat-grid"><div class="neo stat"><span class="stat-icon blue">${icon('book')}</span><div><span>Изучено слов</span><strong>${s.learnedWords}<small>из ${deck().words.length} · уже знаю: ${s.knownWords}</small></strong></div></div><div class="neo stat"><span class="stat-icon violet">${icon('repeat')}</span><div><span>Повторить сегодня</span><strong>${s.due}<small>${s.overdue?'ещё '+s.overdue+' просрочено':'по вашему плану'}</small></strong></div></div><div class="neo stat"><span class="stat-icon green">${icon('check')}</span><div><span>Модулей пройдено</span><strong>${s.learned}<small>из ${new Set(deck().words.map(w=>w.module)).size} загруженных</small></strong></div></div></div>
+  <div class="section-title"><h2>Ваш следующий шаг</h2><a href="#today">Весь план ${icon('arrow')}</a></div><div class="next-grid"><section class="neo task-card"><div class="task-top"><span class="tile-icon lavender">${icon('repeat')}</span>${badge(ready?(s.overdue?'Есть просроченные':'Время вспомнить'):'Всё по плану',ready?'warning':'success')}</div><h3>Повторить и закрепить</h3><p>${ready?`${day(next.module)} · R${next.stage+1}<br>${next.count} слов, новые контексты.`:'Пока нет обязательных повторений.<br>После изучения они появятся здесь.'}</p><div class="task-footer"><span>${icon('clock')} ${ready?'~ 10 минут':'Интервалы 1 → 2 → 4 → 7 → 16'}</span>${ready||hardDue?'<a href="#today">К очереди</a>':''}</div></section><section class="neo task-card"><div class="task-top"><span class="tile-icon peach">${icon('spark')}</span>${badge(n?day(n):'Все слова изучены','muted')}</div><h3>${n?'Слова для изучения':'Продолжайте повторять'}</h3><p>${n?`${wordsOf(n).filter(w=>!s.p.known.has(w.id)&&s.p.wordProgress[w.id].stage<0).slice(0,3).map(w=>esc(w.word)).join(' · ')}…<br>${ready?'Сначала закрепим предыдущие слова.':'Небольшой шаг к большому словарю.'}`:'Первичное изучение завершено.<br>Теперь слова проходят цикл SRS.'}</p><div class="task-footer"><span>${icon('book')} ${n?'Новый модуль':'Долговременная память'}</span>${n&&!ready&&!hardDue&&!pending?'<a href="#today">Открыть план</a>':''}</div></section></div>
+  <section class="neo roadmap-preview"><div class="panel-title"><div><h2>Путь к ${deck().words.length} словам</h2><p>Один модуль. Десять слов. Ещё немного уверенности.</p></div><a class="text-link" href="#roadmap">Вся карта ${icon('arrow')}</a></div><div class="mini-modules">${Array.from({length:10},(_,i)=>miniModule(i+1)).join('')}</div><div class="roadmap-caption"><span><i class="dot blue-dot"></i> Следующий модуль</span><span><i class="dot"></i> Впереди</span><span class="caption-right">${s.learned} / 100 модулей</span></div></section>
   <div class="starter-note">${icon('info')} ${copy.courseNote(deck())} ${btn(deck().deck.id===CATALOG_ID?copy.about:copy.format,deck().deck.id===CATALOG_ID?'sources':'schema','text-btn')}</div></div>
   <aside class="dashboard-aside">${calendar()}<section class="neo upcoming"><div class="panel-title"><h2>Ближайшие повторения</h2>${icon('clock')}</div>${reviewQueue(state,'9999-12-31').slice(0,3).map(m=>`<button class="upcoming-row" data-action="module" data-module="${m.module}"><span class="date-tile"><strong>${fmt(m.nextDate).split(' ')[0]}</strong><small>${fmt(m.nextDate).split(' ').slice(1).join(' ')}</small></span><span><strong>${day(m.module)}</strong><small>Повторение R${m.stage+1} · ${m.count} слов</small></span>${icon('chevron')}</button>`).join('')||`<div class="empty-mini"><span class="empty-icon">${icon('calendar')}</span><p>Здесь появится ваш<br>личный график повторений</p></div>`}<div class="panel-foot">План подстраивается под вас</div></section><section class="neo difficult-panel"><div class="panel-title"><h2>Сложные слова</h2>${badge(s.hard.length)}</div>${s.hard.length?s.hard.slice(0,3).map(h=>{const w=deck().words.find(w=>w.id===h.wordId);return `<button class="hard-row" data-action="word" data-id="${esc(h.wordId)}"><strong>${esc(w?.word||h.wordId)}</strong><span>${esc(w?.translations[0])}</span></button>`;}).join(''):`<div class="gentle-empty">${icon('leaf')}<p>Пока всё получается.<br>Ошибки — тоже часть пути.</p></div>`}${s.hard.length?btn(`Повторить ${hardDue?'('+hardDue+')':''} ${icon('arrow')}`,'difficult','subtle full'):''}</section></aside></div>`;
 }
@@ -388,7 +345,7 @@ async function completeSession(){const a=state.session;if(!a||a.phase==='result'
 function resultPage(a){const r=a.result,p=progress(),m=p.modules[a.module],nextReview=reviewQueue(state,'9999-12-31').find(g=>g.module===a.module),count=a.wordIds.length,counts=r.counts||{recall:a.kind==='final'?50:count,gaps:a.kind==='final'?20:count,enru:100},missed=r.missed.filter(id=>!p.known.has(id));return `<div class="result-container"><div class="result-heading"><span class="result-medallion ${r.success?'':'retry'}">${icon(r.success?'check':'repeat')}</span><div class="eyebrow">${a.kind==='difficult'?'Дополнительная практика':a.kind==='final'?'Итоговая проверка':day(a.module)}</div><h1>${r.success?'Ещё один шаг вперёд.':'Закрепим ещё немного.'}</h1><p>${r.success?(cloudStatus.localError?'Не удалось сохранить результат. Скачайте резервную копию в настройках.':'Проверка завершена. Здесь показаны ваши результаты.'):`Для успеха нужно минимум ${Math.ceil(counts.recall*.8)} из ${counts.recall} в Active Recall и ${Math.ceil(counts.gaps*.8)} из ${counts.gaps} в Fill in the Gaps.`}</p><p id="result-save-state" role="status">${esc(statusText(cloudStatus,accountUser))}</p></div><div class="result-scores">${a.kind==='final'?`<section class="neo"><span>English → Русский</span><strong>${r.scores.enru}<em> / 100</em></strong></section>`:''}<section class="neo"><span>Active Recall</span><strong>${r.scores.recall}<em> / ${counts.recall}</em></strong>${badge(r.scores.recall>=Math.ceil(counts.recall*.8)?'Порог достигнут':'Нужна практика',r.scores.recall>=Math.ceil(counts.recall*.8)?'success':'warning')}</section><section class="neo"><span>Fill in the Gaps</span><strong>${r.scores.gaps}<em> / ${counts.gaps}</em></strong>${badge(r.scores.gaps>=Math.ceil(counts.gaps*.8)?'Порог достигнут':'Нужна практика',r.scores.gaps>=Math.ceil(counts.gaps*.8)?'success':'warning')}</section></div>${a.kind==='initial'||a.kind==='review'?`<div class="notice ${r.success?'success':''}">${icon('calendar')} ${r.success?(nextReview?`Следующее повторение: ${fmt(nextReview.nextDate,true)} · R${nextReview.stage+1}.`:'Поздравляем! Для этого модуля завершён весь цикл R1–R5.'):(a.kind==='review'?`Этап SRS сохранён. Повторная проверка — ${fmt(m.nextDate,true)}.`:'Модуль ещё не изучен. Повторите материалы и попробуйте снова.')}</div>`:''}${missed.length?`<section class="neo result-errors"><h2>Слова для закрепления: ${missed.length}</h2><p>Дополнительная проверка назначена на ${fmt(addDays(today(),1),true)}.</p>${a.answers.filter(x=>!x.correct&&!p.known.has(x.wordId)).map(e=>{const w=deck().words.find(w=>w.id===e.wordId),c=w.clozeItems.find(c=>c.id===e.exerciseId);return `<div class="error-review"><div><strong>${esc(w.word)}</strong>${badge(e.typo?'Опечатка':phaseLabel(e.exerciseType),'muted')}</div><p><s>${esc(e.answer)}</s> ${icon('arrow')} <strong>${esc(c?.acceptedAnswers[0]||w.word)}</strong></p><p lang="en">${esc(c?c.en.replace('{{gap}}',c.acceptedAnswers[0]):w.examples[0].en)}</p><span>${esc(c?.ru||w.examples[0].ru||w.translations.join('; '))}</span></div>`;}).join('')}</section>`:'<p class="perfect-note">'+icon('spark')+' Ни одного слова в списке сложных. Отличная работа.</p>'}<div class="button-row centered">${btn('Вернуться к обзору','finish','subtle')}${btn(r.success?'К плану на сегодня '+icon('arrow'):'Попробовать ещё раз '+icon('repeat'),'after-result','primary')}</div><p class="tiny center">Один успешный тест — начало. Долговременная память формируется повторениями.</p></div>`;}
 
 async function startFinal(){const p=progress(),numbers=[...new Set(deck().words.map(w=>w.module))];if(deck().words.length<1000||numbers.length<100||deck().words.some(w=>!p.known.has(w.id)&&p.wordProgress[w.id]?.stage!==5)||Object.keys(p.difficult).length){toast('Итоговая проверка откроется после загрузки 1000 слов, R5 или отметки «Уже знаю» для каждого слова и закрытия сложных слов.');return;}if(hasPendingSession())return;const tasks=[...shuffle(deck().words).slice(0,100).map(w=>({type:'enru',wordId:w.id})),...shuffle(deck().words).slice(0,50).map(w=>({type:'recall',wordId:w.id})),...shuffle(deck().words).slice(0,20).map(w=>{const c=selectContext(w,p.used);return {type:'gaps',wordId:w.id,exerciseId:c.id,reused:p.used.has(c.id)};})];state.session={id:uid(),deckId:state.activeDeckId,module:null,kind:'final',stage:5,startedAt:new Date().toISOString(),wordIds:[...new Set(tasks.map(t=>t.wordId))],tasks,phase:'enru',index:0,answers:[],input:'',feedback:null};log('session_started',{sessionId:state.session.id,kind:'final'});await save();navigate('study');}
-function render(){document.documentElement.dataset.theme=state.settings.theme;$('#app').dataset.route=route;const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage};$('#app').innerHTML=shell((route==='dashboard'?'':deckBar())+(pages[route]||dashboard)());if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());}
+function render(){document.documentElement.dataset.theme=state.settings.theme;$('#app').dataset.route=route;const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage};$('#app').innerHTML=shell(deckBar()+(pages[route]||dashboard)());if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());}
 async function actions(action,el){
   if(action==='close')return closeModal();
   if(action==='clear-search'||action==='reset-filters'){
@@ -404,14 +361,6 @@ async function actions(action,el){
   }
   if(action==='open-registration'&&cloudConfig.emailsConfigured&&!accountUser)return showModal('Регистрация',registrationForm($('#account-email')?.value));
   if(action==='resend-registration')return sendRegistration(el.closest('form'),true);
-  if(action==='calendar-month'){
-    calendarOffset=Math.min(0,calendarOffset+Number(el.dataset.direction));
-    const panel=$('#activity-calendar');
-    panel.outerHTML=calendar();
-    const buttons=$('#activity-calendar').querySelectorAll('button:not(:disabled)');
-    ([...buttons].find(button=>button.dataset.direction===el.dataset.direction)||buttons[0])?.focus();
-    return;
-  }
   if(action==='refresh-decks')return refreshDecks();
   if(action==='rename-deck'){if(!sharedDecks?.admin)throw new Error('Требуются права администратора.');return showModal('Переименовать колоду',`<label for="deck-title">Название для всех пользователей</label><input id="deck-title" class="neo-input full" maxlength="200" value="${esc(deck().deck.title)}">${btn('Сохранить название','save-deck-title','primary full')}`);}
   if(action==='save-deck-title'){const title=$('#deck-title').value.trim();const pkg=structuredClone(sharedDecks?.rows.find(r=>r.id===state.activeDeckId)?.package||deck());pkg.deck.title=title;await sharedDecks.publish(pkg);installSharedDecks(state,sharedDecks.rows);await save();closeModal();render();return toast('Название колоды обновлено для всех пользователей.');}
