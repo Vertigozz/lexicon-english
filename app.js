@@ -1,3 +1,5 @@
+import {lookupWord,sourceURL,WIKI_LICENSE,audioURL,audioCredit} from './wiktionary.js';
+import {Favorites} from './favorites.js';
 import {SharedDecks,installSharedDecks} from './shared-decks.js';
 import {normalize,uid,localDate,addDays,checkAnswer,shuffle,makeEvent,appendEvent,derive,reviewQueue,nextModule,selectContext,validatePackage,mergePackage,validateBackup,learningTotals} from './core.js';
 import {openStorage,readState,writeState} from './storage.js';
@@ -21,6 +23,109 @@ const day=n=>`Day ${String(n).padStart(3,'0')}`;
 const btn=(label,action,cls='',extra='')=>`<button class="btn ${cls}" data-action="${action}" ${extra}>${label}</button>`;
 const badge=(text,type='')=>`<span class="badge ${type}">${text}</span>`;
 let sharedDecks,catalogError='',catalogRefreshing=false;
+let favorites=new Favorites(null,null);
+const dictionary={query:'',searched:'',status:'idle',results:[],error:''};
+let dictionaryRequest;
+const dictionaryRoutes=['vocabulary','dictionary','favorites'];
+function dictionaryNavigation(){
+  return `<nav class="dictionary-navigation" aria-label="Разделы словаря">${[['vocabulary','Слова колоды'],['dictionary','Найти перевод'],['favorites','Избранное']].map(([path,title])=>`<a href="#${path}"${route===path?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
+}
+function sourceCredit(entry){
+  return `<p class="dictionary-source">Источник <a href="${esc(sourceURL(entry))}" target="_blank" rel="noopener noreferrer">Викисловарь · ${esc(entry.source_title)}</a> · <a href="${WIKI_LICENSE}" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></p>`;
+}
+function pronunciationHTML(entry){
+  const variants=Array.isArray(entry.pronunciations)?entry.pronunciations.filter(v=>v&&typeof v.ipa==='string'&&v.ipa.length<=120).slice(0,4):[];
+  return `<div class="dictionary-pronunciation">
+    ${variants.length?variants.map(v=>{
+      const audio=audioURL(v.audio_url),file=typeof v.audio_file==='string'?v.audio_file.slice(0,200):'';
+      return `<div><p class="dictionary-ipa" lang="en">[${esc(v.ipa)}]</p>
+        ${audio?`<audio controls preload="none" src="${esc(audio)}" aria-label="Запись произношения ${esc(entry.word)}"></audio>${file?`<p class="dictionary-source"><a href="${esc(audioCredit(file))}" target="_blank" rel="noopener noreferrer">Запись и её лицензия · Wikimedia Commons</a></p>`:''}`:''}
+      </div>`;
+    }).join(''):`<p class="tiny">${entry.pronunciations===null||entry.pronunciations===undefined?'Транскрипция ещё не загружена.':'В статье нет транскрипции.'}</p>`}
+    ${btn(icon('sound')+' Голос устройства','dictionary-speak','text-btn',`data-word="${esc(entry.word)}" aria-label="Произнести ${esc(entry.word)} голосом устройства"`)}
+  </div>`;
+}
+function pronounceWord(word,language='en-GB'){
+  if(!state.settings.sound)return toast('Включите произношение в настройках.');
+  if(!('speechSynthesis' in window))return toast('Этот браузер не поддерживает озвучку.');
+  speechSynthesis.cancel();
+  const utterance=new SpeechSynthesisUtterance(word);
+  utterance.lang=language;utterance.rate=.85;
+  utterance.onerror=()=>toast('Английский голос недоступен. Проверьте настройки устройства.');
+  speechSynthesis.speak(utterance);
+}
+function resultIdentity(entry){return JSON.stringify([entry.word.toLowerCase(),entry.translation]);}
+function dictionaryResults(){
+  if(dictionary.status==='loading')return '<p role="status">Ищем в Викисловаре…</p>';
+  if(dictionary.status==='error')return `<p role="status">${esc(dictionary.error)}</p>`;
+  if(dictionary.status==='empty')return '<p role="status">В английском разделе Викисловаря не найдено подходящих русских значений. Попробуйте начальную форму слова или другое написание.</p>';
+  if(dictionary.status==='idle')return '<p>Введите английское слово или выражение, чтобы найти русские значения.</p>';
+  return `<p role="status">Найдено значений: ${dictionary.results.length}. Выберите нужное.</p>
+    ${dictionary.results.map((entry,index)=>{
+      const saved=favorites.rows.some(row=>resultIdentity(row)===resultIdentity(entry)),saving=favorites.pending.has(resultIdentity(entry));
+      return `<article class="dictionary-entry" data-result="${index}"><h2 lang="en" tabindex="-1">${esc(entry.word)}</h2>${pronunciationHTML(entry)}<p>${esc(entry.translation)}</p>
+        ${sourceCredit(entry)}
+        ${accountUser?btn(saved?'В избранном':saving?'Сохраняем…':'В избранное','favorite-add','subtle',`data-index="${index}" ${saved||saving?'disabled':''} aria-label="${saved?'В избранном':'В избранное'} — значение ${index+1}"`):'<a href="#settings">Войдите, чтобы сохранить это значение</a>'}
+      </article>`;
+    }).join('')}`;
+}
+function externalDictionaryPage(){
+  return `${heading('Найти перевод','Английские слова и выражения из Викисловаря.')}${dictionaryNavigation()}
+    <section class="neo dictionary-panel"><form id="dictionary-search-form">
+      <label class="field-label" for="dictionary-query">Английское слово</label>
+      <div class="dictionary-search"><input id="dictionary-query" class="neo-input" type="search" lang="en" maxlength="80" required autocomplete="off" spellcheck="false" value="${esc(dictionary.query)}" placeholder="Например, bank"><button class="btn primary" type="submit">Найти перевод</button></div>
+      <p class="tiny">Текст запроса отправляется в Викисловарь. Каждое значение можно сохранить отдельно.</p>
+    </form><div id="dictionary-results" aria-busy="${dictionary.status==='loading'}">${dictionaryResults()}</div></section>`;
+}
+function favoritesPage(){
+  return `${heading('Избранное','Личная коллекция слов и выбранных переводов.')}${dictionaryNavigation()}
+    <section class="neo dictionary-panel"><p class="favorites-note">Эта коллекция хранится отдельно от учебных колод. Сохранённые слова доступны в вашем аккаунте на других устройствах.</p>
+    ${!accountUser?'<p><a class="btn primary" href="#settings">Войти в аккаунт</a></p>':
+      `<div class="favorites-toolbar"><span>${favorites.loaded?'Сохранено значений: '+favorites.rows.length:'Личное избранное'}</span>${btn(favorites.loading?'Загружаем…':'Обновить','favorites-refresh','subtle',favorites.loading?'disabled':'')}</div>
+      ${favorites.error?`<p role="status">${esc(favorites.error)}</p>`:''}
+      ${favorites.rows.map(entry=>`<article class="dictionary-entry"><h2 lang="en">${esc(entry.word)}</h2>${pronunciationHTML(entry)}<p>${esc(entry.translation)}</p>${sourceCredit(entry)}
+      ${entry.pronunciations===null||entry.pronunciations===undefined?btn(favorites.pending.has(entry.entry_key)?'Загружаем…':'Загрузить транскрипцию','favorite-pronunciation','subtle',`data-key="${esc(entry.entry_key)}" ${favorites.pending.has(entry.entry_key)?'disabled':''}`):''}</article>`).join('')}
+      ${favorites.loaded&&!favorites.rows.length?'<div class="empty-state"><h2>Здесь будут сохранённые слова</h2><p>Найдите перевод и добавьте нужное значение.</p><a class="btn primary" href="#dictionary">Найти перевод</a></div>':''}
+      ${!favorites.loaded&&!favorites.error?'<p role="status">Загружаем избранное…</p>':''}`}
+    </section>`;
+}
+function paintDictionaryResults(){
+  const panel=$('#dictionary-results');
+  if(panel){
+    const focused=document.activeElement?.closest('.dictionary-entry')?.dataset.result;
+    panel.innerHTML=dictionaryResults();panel.setAttribute('aria-busy',String(dictionary.status==='loading'));
+    if(focused!==undefined)panel.querySelector(`[data-result="${focused}"] h2`)?.focus();
+  }
+}
+async function searchDictionary(){
+  dictionaryRequest?.abort();
+  const controller=new AbortController();dictionaryRequest=controller;
+  dictionary.query=$('#dictionary-query').value;
+  dictionary.searched=dictionary.query;
+  dictionary.status='loading';dictionary.results=[];dictionary.error='';
+  paintDictionaryResults();
+  const timer=setTimeout(()=>controller.abort(),30000);
+  try{
+    const entries=await lookupWord(dictionary.query,{signal:controller.signal});
+    if(dictionaryRequest!==controller)return;
+    dictionary.results=entries;dictionary.status=entries.length?'found':'empty';
+  }catch(error){
+    if(dictionaryRequest!==controller)return;
+    dictionary.error=controller.signal.aborted?'Викисловарь долго не отвечает. Повторите поиск.':error instanceof TypeError?'Не удалось подключиться к Викисловарю. Проверьте интернет и повторите поиск.':error.message;
+    dictionary.status='error';
+  }finally{
+    clearTimeout(timer);
+    if(dictionaryRequest===controller)paintDictionaryResults();
+  }
+}
+async function refreshFavorites(){
+  const target=favorites,pending=target.refresh();
+  if(route==='favorites')render();
+  await pending;
+  if(target!==favorites)return;
+  if(route==='favorites')render();
+  else paintDictionaryResults();
+}
 const authHash=new URLSearchParams(location.hash.slice(1)),authQuery=new URLSearchParams(location.search);
 const emailLinkError=authHash.has('error_code')||authQuery.has('error_code');
 const emailConfirmed=authHash.get('type')==='signup'&&authHash.has('access_token');
@@ -70,7 +175,12 @@ async function startCloud(){
         await save(false);if(route==='study'){route='dashboard';location.hash='dashboard';}
         try{localStorage.removeItem('lexicon-draft');}catch{}
       }
-      accountUser=user;if(cloud?.client){sharedDecks=new SharedDecks(cloud.client);await refreshDecks(false);}cloudStatus.at=null;cloudStatus.error='';
+      accountUser=user;
+      if(favorites.user?.id!==user?.id||favorites.client!==cloud.client){
+        favorites=new Favorites(cloud.client,user);
+        if(user)refreshFavorites();
+      }
+      if(cloud?.client){sharedDecks=new SharedDecks(cloud.client);await refreshDecks(false);}cloudStatus.at=null;cloudStatus.error='';
       const guest=await readState('guest');guestAvailable=Boolean(guest?.events.some(e=>['attempt','session_completed'].includes(e.type))||guest?.session);
       closeModal();render();
     }
@@ -176,9 +286,9 @@ function log(type,data){appendEvent(state,makeEvent(state,type,data));}
 function navigate(next){route=next;location.hash=next;render();window.scrollTo({top:0,behavior:'instant'});}
 function stats(){const p=progress(),ms=Object.values(p.modules),q=reviewQueue(state),learned=ms.filter(m=>m.covered).length;return {p,ms,q,learned,...learningTotals(state,p),mastered:ms.filter(m=>m.stage===5).length,hard:Object.values(p.difficult),due:q.filter(m=>m.nextDate===today()).length,overdue:q.filter(m=>m.nextDate<today()).length};}
 function sidebar(){const nav=[['dashboard','grid','Обзор'],['today','calendar','Сегодня'],['vocabulary','book','Словарь'],['roadmap','map','Карта'],['statistics','chart','Статистика']];const q=reviewQueue(state).length;
-  return `<aside class="sidebar"><a href="#dashboard" class="brand" aria-label="Lexicon, главная"><span class="brand-mark">${icon('book')}</span>lexicon<span class="brand-dot">.</span></a><div class="sidebar-label">ВАШЕ УЧЕБНОЕ ПРОСТРАНСТВО</div><nav aria-label="Главная навигация">${nav.map(([r,i,t])=>`<a href="#${r}" class="nav-item ${route===r?'active':''}" ${route===r?'aria-current="page"':''}>${icon(i)}<span>${t}</span>${r==='today'&&q?`<span class="nav-count">${q}</span>`:''}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="quiet-note"><div class="quiet-icon">${icon('leaf')}</div><strong>В своём ритме</strong><p>Не гонитесь за количеством.<br>Дайте словам остаться с вами.</p><span class="tiny">НЕМНОГО КАЖДЫЙ ДЕНЬ</span></div><a href="#settings" class="nav-item ${route==='settings'?'active':''}">${icon('settings')}<span>Настройки</span></a><button class="nav-item help-btn" data-action="help">${icon('help')}<span>Как это работает</span></button><div class="local-status"><span></span> ${accountUser?'Прогресс привязан к аккаунту':'Без аккаунта · только этот браузер'}</div></div></aside>`;
+  return `<aside class="sidebar"><a href="#dashboard" class="brand" aria-label="Lexicon, главная"><span class="brand-mark">${icon('book')}</span>lexicon<span class="brand-dot">.</span></a><div class="sidebar-label">ВАШЕ УЧЕБНОЕ ПРОСТРАНСТВО</div><nav aria-label="Главная навигация">${nav.map(([r,i,t])=>`<a href="#${r}" class="nav-item ${(route===r||r==='vocabulary'&&dictionaryRoutes.includes(route))?'active':''}" ${(route===r||r==='vocabulary'&&dictionaryRoutes.includes(route))?'aria-current="page"':''}>${icon(i)}<span>${t}</span>${r==='today'&&q?`<span class="nav-count">${q}</span>`:''}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="quiet-note"><div class="quiet-icon">${icon('leaf')}</div><strong>В своём ритме</strong><p>Не гонитесь за количеством.<br>Дайте словам остаться с вами.</p><span class="tiny">НЕМНОГО КАЖДЫЙ ДЕНЬ</span></div><a href="#settings" class="nav-item ${route==='settings'?'active':''}">${icon('settings')}<span>Настройки</span></a><button class="nav-item help-btn" data-action="help">${icon('help')}<span>Как это работает</span></button><div class="local-status"><span></span> ${accountUser?'Прогресс привязан к аккаунту':'Без аккаунта · только этот браузер'}</div></div></aside>`;
 }
-function shell(body){const titles={dashboard:'Обзор',today:'Сегодня',vocabulary:'Словарь',roadmap:'Карта',statistics:'Статистика',settings:'Настройки',study:'Тренировка'};
+function shell(body){const titles={dashboard:'Обзор',today:'Сегодня',vocabulary:'Словарь',dictionary:'Найти перевод',favorites:'Избранное',roadmap:'Карта',statistics:'Статистика',settings:'Настройки',study:'Тренировка'};
   return `${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span class="breadcrumb-prefix">Моё пространство</span> ${icon('chevron')} <span>${titles[route]||'Обзор'}</span></div><div class="top-actions"><span class="local-pill">${icon('lock')} Личное пространство</span><button class="icon-btn" data-action="theme" aria-label="${state.settings.theme==='dark'?'Светлая':'Тёмная'} тема">${icon(state.settings.theme==='dark'?'sun':'moon')}</button><button class="icon-btn" data-action="notifications" aria-label="Очередь повторений">${icon('bell')}${reviewQueue(state).length?'<i class="notification-dot"></i>':''}</button><a href="#settings" class="profile-link" aria-label="Настройки профиля">${icon('settings')}<span>Настройки</span></a></div></header><main id="content" tabindex="-1">${storageError?`<div class="notice error">${icon('info')}${esc(storageError)} ${btn('Скачать копию','backup','small')}</div>`:''}${!navigator.onLine?'<div class="notice">Вы офлайн. Слова и прогресс доступны на этом устройстве.</div>':''}${body}</main><footer><span>Lexicon · Пространство для роста</span><span>${icon('check')} <span id="save-state">${esc(statusText(cloudStatus,accountUser))}</span></span></footer></div>`;
 }
 function heading(title,sub,action=''){return `<div class="page-heading"><div><div class="eyebrow">${esc(new Intl.DateTimeFormat('ru',{weekday:'long',day:'numeric',month:'long',timeZone:state.settings.timeZone}).format(new Date()))}</div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div>${action}</div>`;}
@@ -207,7 +317,7 @@ function dashboard(){const s=stats(),n=nextModule(state),ratio=deck().words.leng
   <aside class="dashboard-aside">${calendar()}<section class="neo upcoming"><div class="panel-title"><h2>Ближайшие повторения</h2>${icon('clock')}</div>${reviewQueue(state,'9999-12-31').slice(0,3).map(m=>`<button class="upcoming-row" data-action="module" data-module="${m.module}"><span class="date-tile"><strong>${fmt(m.nextDate).split(' ')[0]}</strong><small>${fmt(m.nextDate).split(' ').slice(1).join(' ')}</small></span><span><strong>${day(m.module)}</strong><small>Повторение R${m.stage+1} · ${m.count} слов</small></span>${icon('chevron')}</button>`).join('')||`<div class="empty-mini"><span class="empty-icon">${icon('calendar')}</span><p>Здесь появится ваш<br>личный график повторений</p></div>`}<div class="panel-foot">План подстраивается под вас</div></section><section class="neo difficult-panel"><div class="panel-title"><h2>Сложные слова</h2>${badge(s.hard.length)}</div>${s.hard.length?s.hard.slice(0,3).map(h=>{const w=deck().words.find(w=>w.id===h.wordId);return `<button class="hard-row" data-action="word" data-id="${esc(h.wordId)}"><strong>${esc(w?.word||h.wordId)}</strong><span>${esc(w?.translations[0])}</span></button>`;}).join(''):`<div class="gentle-empty">${icon('leaf')}<p>Пока всё получается.<br>Ошибки — тоже часть пути.</p></div>`}${s.hard.length?btn(`Повторить ${hardDue?'('+hardDue+')':''} ${icon('arrow')}`,'difficult','subtle full'):''}</section></aside></div>`;
 }
 function todayPage(){const s=stats(),hard=s.hard.filter(h=>h.date<=today()),n=nextModule(state);return `${heading('План на сегодня','Сначала закрепляем знакомое, затем открываем новое.',s.q.length||hard.length?btn(icon('repeat')+' Только повторения','reviews','subtle'):'')}<div class="today-summary"><div class="neo summary-number"><strong>${s.overdue}</strong><span>просрочено</span></div><div class="neo summary-number"><strong>${s.due}</strong><span>повторить сегодня</span></div><div class="neo summary-number"><strong>${hard.length}</strong><span>сложных слов</span></div></div><section class="neo queue-panel"><div class="panel-title"><h2>Ваша очередь</h2>${badge(s.q.length+hard.length+' задач')}</div>${s.q.map(m=>`<div class="queue-row"><span class="tile-icon lavender">${icon('repeat')}</span><div class="queue-copy"><h3>${day(m.module)} <span>Повторение R${m.stage+1}</span></h3><p>${m.count} слов · Active Recall + Fill in the Gaps</p></div><div class="queue-date">${badge(m.nextDate<today()?'Просрочено':'Сегодня',m.nextDate<today()?'danger':'warning')}<small>${fmt(m.nextDate,true)}</small></div>${btn('Повторить '+icon('arrow'),'review','primary small',`data-module="${m.module}" data-stage="${m.stage}"`)}</div>`).join('')}${hard.length?`<div class="queue-row"><span class="tile-icon peach">${icon('flag')}</span><div class="queue-copy"><h3>Точечная практика</h3><p>${hard.length} сложных слов · дополнительная проверка</p></div>${btn('Закрепить','difficult','small')}</div>`:''}${!s.q.length&&!hard.length?`<div class="empty-state">${icon('check')}<h3>Все обязательные повторения выполнены</h3><p>Можно познакомиться с новыми словами или отдохнуть.</p></div>`:''}${n?`<div class="queue-row new-row"><span class="tile-icon blue">${icon('book')}</span><div class="queue-copy"><h3>${day(n)} <span>Новые слова</span></h3><p>${s.q.length||hard.length?'Откроется после обязательных повторений':(wordsOf(n).filter(w=>!s.p.known.has(w.id)&&s.p.wordProgress[w.id].stage<0).length+' слов · в своём темпе')}</p></div>${s.q.length||hard.length?'':btn('Начать '+icon('arrow'),'new','primary')}</div>`:''}</section><div class="notice">${icon('info')} Пропуск не обнуляет прогресс. Следующий срок будет рассчитан от дня, когда вы действительно завершите повторение.</div>`;}
-function vocabularyPage(){return `${heading('Ваш словарь','Слова, к которым всегда можно вернуться.',sharedDecks?.admin?btn(icon('upload')+' Загрузить колоду','import','subtle'):'')}<section class="neo vocabulary-panel"><div class="vocabulary-toolbar"><label class="search-field">${icon('search')}<input id="word-search" type="search" placeholder="Найти слово или перевод…" value="${esc(filters.search)}" aria-label="Поиск слов"></label>${btn('Очистить поиск','clear-search','text-btn')}<select id="module-filter" class="neo-select" aria-label="Фильтр по модулю"><option value="">Все модули</option>${[...new Set(deck().words.map(w=>w.module))].sort((a,b)=>a-b).map(n=>`<option value="${n}" ${String(n)===filters.module?'selected':''}>${day(n)}</option>`).join('')}</select><select id="status-filter" class="neo-select" aria-label="Статус изучения">${[['all','Все слова'],['new','Не изучены'],['learned','Изучены'],['known','Уже знаю'],['hard','С ошибками']].map(([v,t])=>`<option value="${v}" ${v===filters.status?'selected':''}>${t}</option>`).join('')}</select></div><div class="table-head"><span>СЛОВО</span><span>ПЕРЕВОД</span><span>МОДУЛЬ</span><span>СТАТУС</span></div><div id="word-list">${wordList()}</div></section>`;}
+function vocabularyPage(){return `${heading('Ваш словарь','Слова, к которым всегда можно вернуться.',sharedDecks?.admin?btn(icon('upload')+' Загрузить колоду','import','subtle'):'')}${dictionaryNavigation()}<section class="neo vocabulary-panel"><div class="vocabulary-toolbar"><label class="search-field">${icon('search')}<input id="word-search" type="search" placeholder="Найти слово или перевод…" value="${esc(filters.search)}" aria-label="Поиск слов"></label>${btn('Очистить поиск','clear-search','text-btn')}<select id="module-filter" class="neo-select" aria-label="Фильтр по модулю"><option value="">Все модули</option>${[...new Set(deck().words.map(w=>w.module))].sort((a,b)=>a-b).map(n=>`<option value="${n}" ${String(n)===filters.module?'selected':''}>${day(n)}</option>`).join('')}</select><select id="status-filter" class="neo-select" aria-label="Статус изучения">${[['all','Все слова'],['new','Не изучены'],['learned','Изучены'],['known','Уже знаю'],['hard','С ошибками']].map(([v,t])=>`<option value="${v}" ${v===filters.status?'selected':''}>${t}</option>`).join('')}</select></div><div class="table-head"><span>СЛОВО</span><span>ПЕРЕВОД</span><span>МОДУЛЬ</span><span>СТАТУС</span></div><div id="word-list">${wordList()}</div></section>`;}
 function wordList(){const p=progress(),term=normalize(filters.search),errorIds=new Set(state.events.filter(e=>e.deckId===state.activeDeckId&&e.type==='attempt'&&!e.correct).map(e=>e.wordId));
   const words=deck().words.filter(w=>(!term||normalize(w.word+' '+w.translations.join(' ')).includes(term))&&(!filters.module||String(w.module)===filters.module)&&(filters.status==='all'||filters.status==='new'&&!p.known.has(w.id)&&p.wordProgress[w.id].stage<0||filters.status==='learned'&&(p.known.has(w.id)||p.wordProgress[w.id].stage>=0)||filters.status==='known'&&p.known.has(w.id)||filters.status==='hard'&&!p.known.has(w.id)&&errorIds.has(w.id)));
   return `<div class="list-count">Найдено ${words.length} из ${deck().words.length} слов${words.length>150?' · показаны первые 150, уточните поиск':''}</div>${words.slice(0,150).map(w=>`<button class="word-row" data-action="word" data-id="${esc(w.id)}"><span><strong>${esc(w.word)}</strong><small>${esc(w.ipa)}</small></span><span>${esc(w.translations.join('; '))}</span><span class="word-module">${day(w.module)}</span><span>${badge(p.known.has(w.id)?'Уже знаю':p.difficult[w.id]?'Требует внимания':p.wordProgress[w.id].stage===5?'Цикл завершён':p.wordProgress[w.id].stage>=0?'На повторении':'Новое',p.known.has(w.id)||p.wordProgress[w.id].stage>=0?'success':p.difficult[w.id]?'warning':'muted')}</span></button>`).join('')||'<div class="empty-state"><h3>Таких слов пока нет</h3><p>Попробуйте другой запрос или измените фильтры.</p><button class="btn subtle" data-action="reset-filters">Сбросить фильтры</button></div>'}`;
@@ -345,9 +455,45 @@ async function completeSession(){const a=state.session;if(!a||a.phase==='result'
 function resultPage(a){const r=a.result,p=progress(),m=p.modules[a.module],nextReview=reviewQueue(state,'9999-12-31').find(g=>g.module===a.module),count=a.wordIds.length,counts=r.counts||{recall:a.kind==='final'?50:count,gaps:a.kind==='final'?20:count,enru:100},missed=r.missed.filter(id=>!p.known.has(id));return `<div class="result-container"><div class="result-heading"><span class="result-medallion ${r.success?'':'retry'}">${icon(r.success?'check':'repeat')}</span><div class="eyebrow">${a.kind==='difficult'?'Дополнительная практика':a.kind==='final'?'Итоговая проверка':day(a.module)}</div><h1>${r.success?'Ещё один шаг вперёд.':'Закрепим ещё немного.'}</h1><p>${r.success?(cloudStatus.localError?'Не удалось сохранить результат. Скачайте резервную копию в настройках.':'Проверка завершена. Здесь показаны ваши результаты.'):`Для успеха нужно минимум ${Math.ceil(counts.recall*.8)} из ${counts.recall} в Active Recall и ${Math.ceil(counts.gaps*.8)} из ${counts.gaps} в Fill in the Gaps.`}</p><p id="result-save-state" role="status">${esc(statusText(cloudStatus,accountUser))}</p></div><div class="result-scores">${a.kind==='final'?`<section class="neo"><span>English → Русский</span><strong>${r.scores.enru}<em> / 100</em></strong></section>`:''}<section class="neo"><span>Active Recall</span><strong>${r.scores.recall}<em> / ${counts.recall}</em></strong>${badge(r.scores.recall>=Math.ceil(counts.recall*.8)?'Порог достигнут':'Нужна практика',r.scores.recall>=Math.ceil(counts.recall*.8)?'success':'warning')}</section><section class="neo"><span>Fill in the Gaps</span><strong>${r.scores.gaps}<em> / ${counts.gaps}</em></strong>${badge(r.scores.gaps>=Math.ceil(counts.gaps*.8)?'Порог достигнут':'Нужна практика',r.scores.gaps>=Math.ceil(counts.gaps*.8)?'success':'warning')}</section></div>${a.kind==='initial'||a.kind==='review'?`<div class="notice ${r.success?'success':''}">${icon('calendar')} ${r.success?(nextReview?`Следующее повторение: ${fmt(nextReview.nextDate,true)} · R${nextReview.stage+1}.`:'Поздравляем! Для этого модуля завершён весь цикл R1–R5.'):(a.kind==='review'?`Этап SRS сохранён. Повторная проверка — ${fmt(m.nextDate,true)}.`:'Модуль ещё не изучен. Повторите материалы и попробуйте снова.')}</div>`:''}${missed.length?`<section class="neo result-errors"><h2>Слова для закрепления: ${missed.length}</h2><p>Дополнительная проверка назначена на ${fmt(addDays(today(),1),true)}.</p>${a.answers.filter(x=>!x.correct&&!p.known.has(x.wordId)).map(e=>{const w=deck().words.find(w=>w.id===e.wordId),c=w.clozeItems.find(c=>c.id===e.exerciseId);return `<div class="error-review"><div><strong>${esc(w.word)}</strong>${badge(e.typo?'Опечатка':phaseLabel(e.exerciseType),'muted')}</div><p><s>${esc(e.answer)}</s> ${icon('arrow')} <strong>${esc(c?.acceptedAnswers[0]||w.word)}</strong></p><p lang="en">${esc(c?c.en.replace('{{gap}}',c.acceptedAnswers[0]):w.examples[0].en)}</p><span>${esc(c?.ru||w.examples[0].ru||w.translations.join('; '))}</span></div>`;}).join('')}</section>`:'<p class="perfect-note">'+icon('spark')+' Ни одного слова в списке сложных. Отличная работа.</p>'}<div class="button-row centered">${btn('Вернуться к обзору','finish','subtle')}${btn(r.success?'К плану на сегодня '+icon('arrow'):'Попробовать ещё раз '+icon('repeat'),'after-result','primary')}</div><p class="tiny center">Один успешный тест — начало. Долговременная память формируется повторениями.</p></div>`;}
 
 async function startFinal(){const p=progress(),numbers=[...new Set(deck().words.map(w=>w.module))];if(deck().words.length<1000||numbers.length<100||deck().words.some(w=>!p.known.has(w.id)&&p.wordProgress[w.id]?.stage!==5)||Object.keys(p.difficult).length){toast('Итоговая проверка откроется после загрузки 1000 слов, R5 или отметки «Уже знаю» для каждого слова и закрытия сложных слов.');return;}if(hasPendingSession())return;const tasks=[...shuffle(deck().words).slice(0,100).map(w=>({type:'enru',wordId:w.id})),...shuffle(deck().words).slice(0,50).map(w=>({type:'recall',wordId:w.id})),...shuffle(deck().words).slice(0,20).map(w=>{const c=selectContext(w,p.used);return {type:'gaps',wordId:w.id,exerciseId:c.id,reused:p.used.has(c.id)};})];state.session={id:uid(),deckId:state.activeDeckId,module:null,kind:'final',stage:5,startedAt:new Date().toISOString(),wordIds:[...new Set(tasks.map(t=>t.wordId))],tasks,phase:'enru',index:0,answers:[],input:'',feedback:null};log('session_started',{sessionId:state.session.id,kind:'final'});await save();navigate('study');}
-function render(){document.documentElement.dataset.theme=state.settings.theme;$('#app').dataset.route=route;const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage};$('#app').innerHTML=shell(deckBar()+(pages[route]||dashboard)());if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());}
+function render(){document.documentElement.dataset.theme=state.settings.theme;$('#app').dataset.route=route;const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,dictionary:externalDictionaryPage,favorites:favoritesPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage};$('#app').innerHTML=shell((['dictionary','favorites'].includes(route)?'':deckBar())+(pages[route]||dashboard)());if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());}
 async function actions(action,el){
   if(action==='close')return closeModal();
+  if(action==='dictionary-speak')return pronounceWord(el.dataset.word);
+  if(action==='favorite-pronunciation'){
+    const target=favorites,row=target.rows.find(r=>r.entry_key===el.dataset.key);
+    if(!row||!accountUser||target.pending.has(row.entry_key))return;
+    target.pending.add(row.entry_key);render();
+    try{
+      const entries=await lookupWord(row.word,{revision:row.source_revision,signal:AbortSignal.timeout(20000)});
+      const original=entries.find(e=>e.translation===row.translation);
+      if(!original)throw new Error('Не удалось найти сохранённое значение в исходной статье.');
+      await target.addPronunciations(row,original.pronunciations);
+      if(target===favorites)toast(original.pronunciations.length?'Произношение сохранено.':'В исходной статье нет транскрипции. Доступен голос устройства.');
+    }finally{
+      target.pending.delete(row.entry_key);
+      if(target===favorites&&route==='favorites'){
+        render();
+        $('#content')?.focus({preventScroll:true});
+      }
+    }
+    return;
+  }
+  if(action==='favorites-refresh')return refreshFavorites();
+  if(action==='favorite-add'){
+    const entry=dictionary.results[Number(el.dataset.index)];
+    if(!entry||!accountUser)return;
+    const target=favorites,identity=resultIdentity(entry);
+    if(target.pending.has(identity))return;
+    target.pending.add(identity);paintDictionaryResults();
+    try{
+      await target.add(entry);
+      if(target===favorites)toast('Слово и выбранное значение сохранены в избранном.');
+    }finally{
+      target.pending.delete(identity);
+      paintDictionaryResults();
+    }
+    return;
+  }
   if(action==='clear-search'||action==='reset-filters'){
     filters.search='';
     if(action==='reset-filters'){
@@ -405,15 +551,15 @@ async function actions(action,el){
   if(action==='after-result'){const a=state.session,success=a.result.success;state.session=null;finishPendingCatalogActivation(state);await save();if(a.deckId!==state.activeDeckId){navigate('dashboard');toast(copy.ready);return;}if(success)return navigate('today');if(a.kind==='final')return startFinal();if(a.kind==='review'||a.kind==='difficult'){navigate('today');toast('Следующая попытка назначена на завтра.');return;}return startSession(a.module,a.kind);}
   if(action==='final')return startFinal();
   if(action==='sound'){state.settings.sound=!state.settings.sound;await save();return render();}
-  if(action==='speak'){if(!state.settings.sound)return toast('Включите произношение в настройках.');if(!('speechSynthesis' in window))return toast('Этот браузер не поддерживает озвучку.');const w=deck().words.find(w=>w.id===el.dataset.id);if(w){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(w.word);u.lang=deck().deck.pronunciation||'en-GB';u.rate=.85;u.onerror=()=>toast('Английский голос недоступен. Проверьте настройки устройства.');speechSynthesis.speak(u);}return;}
+  if(action==='speak'){const w=deck().words.find(w=>w.id===el.dataset.id);if(w)pronounceWord(w.word,deck().deck.pronunciation||'en-GB');return;}
   if(action==='reset'||action==='delete-deck'){if(action==='delete-deck'&&state.decks.length===1)return toast('Сначала добавьте другую колоду. Единственную колоду можно только обнулить.');showModal(action==='reset'?'Начать с чистого листа?':'Удалить эту колоду?',`<p>${action==='reset'?'Все результаты, ответы и расписание повторений активной колоды будут удалены. Слова останутся.':'Колода и вся её история будут удалены с этого устройства.'}</p><p>Сначала сохраните резервную копию. Затем станет доступно подтверждение.</p>${btn('Скачать резервную копию','backup-before-reset','subtle full')}${btn(action==='reset'?'Обнулить прогресс':'Удалить колоду','confirm-reset','danger full',`data-mode="${action}" disabled id="reset-confirm"`)}`);return;}
   if(action==='backup-before-reset'){backup();$('#reset-confirm').disabled=false;return;}
   if(action==='confirm-reset'){state.events=state.events.filter(e=>e.deckId!==state.activeDeckId);if(state.session?.deckId===state.activeDeckId)state.session=null;if(el.dataset.mode==='delete-deck'){state.decks=state.decks.filter(d=>d.deck.id!==state.activeDeckId);state.activeDeckId=state.decks[0].deck.id;}try{localStorage.removeItem('lexicon-draft');}catch{}await save();closeModal();navigate('dashboard');return toast('Готово. Можно начать заново.');}
   if(action==='help')return showModal('Десять слов. Пять повторений.',`<div class="help-steps"><div><span>01</span><section><h3>Познакомьтесь</h3><p>10 слов, транскрипции, переводы и живые примеры.</p></section></div><div><span>02</span><section><h3>Вспомните сами</h3><p>Переведите с русского на английский и заполните пропуски. Нужны 80% отдельно в каждом упражнении. «Уже знаю» исключает слово из урока и SRS; новые слова взамен не добавляются.</p></section></div><div><span>03</span><section><h3>Возвращайтесь к знакомому</h3><p>Повторяйте через 1, 2, 4, 7 и 16 дней после предыдущего успешного этапа. Пропуски сдвигают план, а не обнуляют его.</p></section></div></div><div class="notice">Без аккаунта прогресс хранится в этом браузере. Войдите в настройках, чтобы продолжать занятия на других устройствах. Резервную копию можно скачать в любое время.</div>`);
 }
 document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(el&&!el.disabled){e.preventDefault();actions(el.dataset.action,el).catch(err=>{console.error(err);toast('Не удалось выполнить действие. '+err.message);});}if(e.target.classList.contains('modal-backdrop'))closeModal();});
-document.addEventListener('submit',e=>{if(e.target.id==='registration-form'){e.preventDefault();sendRegistration(e.target);return;}if(e.target.id==='new-password-form'){e.preventDefault();const form=e.target,button=form.querySelector('button');button.disabled=true;cloud.updatePassword($('#new-password').value).then(()=>{history.replaceState(null,'',location.pathname+'#settings');closeModal();toast('Пароль обновлён.');}).catch(err=>authMessage(err.message)).finally(()=>button.disabled=false);return;}if(e.target.id==='cloud-auth-form'){e.preventDefault();cloudAction('cloud-login',e.target.querySelector('button')).catch(err=>authMessage(err.message));return;}if(e.target.id==='answer-form'){e.preventDefault();if(state.session?.feedback)nextQuestion();else checkCurrent();}});
-document.addEventListener('input',e=>{if(e.target.id==='answer'){const a=state.session;if(!a)return;a.input=e.target.value;try{localStorage.setItem('lexicon-draft',JSON.stringify({sessionId:a.id,index:a.index,taskId:a.tasks[a.index]?.attemptId,phase:a.phase,input:a.input}));}catch{}clearTimeout(saveTimer);saveTimer=setTimeout(save,250);}if(e.target.id==='word-search'){filters.search=e.target.value;$('#word-list').innerHTML=wordList();}});
+document.addEventListener('submit',e=>{if(e.target.id==='dictionary-search-form'){e.preventDefault();searchDictionary();return;}if(e.target.id==='registration-form'){e.preventDefault();sendRegistration(e.target);return;}if(e.target.id==='new-password-form'){e.preventDefault();const form=e.target,button=form.querySelector('button');button.disabled=true;cloud.updatePassword($('#new-password').value).then(()=>{history.replaceState(null,'',location.pathname+'#settings');closeModal();toast('Пароль обновлён.');}).catch(err=>authMessage(err.message)).finally(()=>button.disabled=false);return;}if(e.target.id==='cloud-auth-form'){e.preventDefault();cloudAction('cloud-login',e.target.querySelector('button')).catch(err=>authMessage(err.message));return;}if(e.target.id==='answer-form'){e.preventDefault();if(state.session?.feedback)nextQuestion();else checkCurrent();}});
+document.addEventListener('input',e=>{if(e.target.id==='dictionary-query')dictionary.query=e.target.value;if(e.target.id==='answer'){const a=state.session;if(!a)return;a.input=e.target.value;try{localStorage.setItem('lexicon-draft',JSON.stringify({sessionId:a.id,index:a.index,taskId:a.tasks[a.index]?.attemptId,phase:a.phase,input:a.input}));}catch{}clearTimeout(saveTimer);saveTimer=setTimeout(save,250);}if(e.target.id==='word-search'){filters.search=e.target.value;$('#word-list').innerHTML=wordList();}});
 document.addEventListener('change',async e=>{const el=e.target;try{if(el.id==='import-file')await previewImport(el.files[0]);if(el.id==='restore-file')await previewRestore(el.files[0]);if(el.id==='module-filter'){filters.module=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='status-filter'){filters.status=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='timezone'){state.settings.timeZone=el.value;await save();render();toast('Часовой пояс обновлён.');}if(el.id==='reminder'){state.settings.reminder=el.value;await save();toast('Время занятий сохранено.');}if((el.id==='deck-select'||el.id==='catalog-deck-select')){if(state.session&&state.session.phase!=='result'){render();toast('Сначала завершите текущую тренировку.');return;}state.session=null;state.activeDeckId=el.value;filters={search:'',module:'',status:'all'};await save();render();}}catch(err){toast(err.message);}});
 document.addEventListener('keydown',e=>{const modal=$('[role="dialog"]');if(modal){if(e.key==='Escape')closeModal();if(e.key==='Tab'){const els=[...modal.querySelectorAll('button:not(:disabled),a[href],input,select,summary,[tabindex="0"]')].filter(x=>x.getClientRects().length),first=els[0],last=els.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}return;}if(e.key==='Enter'&&route==='study'&&state.session?.feedback&&e.target.tagName!=='BUTTON'){e.preventDefault();nextQuestion();}});
 $('.skip-link').addEventListener('click',e=>{
@@ -431,6 +577,7 @@ window.addEventListener('hashchange',()=>{
   render();
   window.scrollTo({top:0,behavior:'instant'});
   if(route!=='study')$('#content')?.focus({preventScroll:true});
+  if(route==='favorites'&&accountUser)refreshFavorites();
 });
 window.addEventListener('online',()=>{render();cloud?.sync();});window.addEventListener('offline',()=>{if(accountUser)cloudStatus.mode='offline';render();});
 async function refreshLocal(){if(!state)return;const activeScope=scope;const saved=await readState(activeScope);if(saved&&activeScope===scope){const before=JSON.stringify(state.session);applySaved(saved);if(route!=='study'||before!==JSON.stringify(state.session))render();}cloud?.sync();}
