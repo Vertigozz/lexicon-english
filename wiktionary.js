@@ -12,15 +12,6 @@ export function sourceURL(entry){
   url.hash='Английский';
   return url.href;
 }
-export function audioURL(value){
-  try{
-    const url=new URL(value,'https://ru.wiktionary.org');
-    return url.protocol==='https:'&&url.hostname==='upload.wikimedia.org'&&url.pathname.startsWith('/wikipedia/commons/')?url.href:'';
-  }catch{return '';}
-}
-export function audioCredit(file){
-  return 'https://commons.wikimedia.org/wiki/File:'+encodeURIComponent(file);
-}
 function pronunciationsAfter(heading){
   const variants=[];
   let next=(heading.closest('.mw-heading')||heading).nextElementSibling;
@@ -29,9 +20,7 @@ function pronunciationsAfter(heading){
     for(const container of containers){
       const ipa=container.querySelector('.IPA')?.textContent.trim();
       if(!ipa||ipa.length>120||variants.some(v=>v.ipa===ipa))continue;
-      const audio=container.querySelector('audio[data-mwprovider="wikimediacommons"]');
-      const source=audio?.querySelector('source[type="audio/mpeg"]')||audio?.querySelector('source');
-      variants.push({ipa,audio_url:audioURL(source?.getAttribute('src')||''),audio_file:audio?.getAttribute('data-mwtitle')||''});
+      variants.push({ipa});
     }
     next=next.nextElementSibling;
   }

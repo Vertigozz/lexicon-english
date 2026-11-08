@@ -316,5 +316,3 @@ a.btn { text-decoration: none; }
 }
 .dictionary-pronunciation { margin:.5rem 0 .75rem; }
 .dictionary-ipa { font-size:1rem; color:var(--muted); margin:.35rem 0; overflow-wrap:anywhere; }
-.dictionary-pronunciation audio { display:block; width:100%; max-width:20rem; min-width:0; margin-top:.5rem; }
-.dictionary-pronunciation .dictionary-source { margin:.35rem 0; font-size:.875rem; }

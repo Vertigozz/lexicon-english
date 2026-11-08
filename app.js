@@ -1,4 +1,4 @@
-import {lookupWord,sourceURL,WIKI_LICENSE,audioURL,audioCredit} from './wiktionary.js';
+import {lookupWord,sourceURL,WIKI_LICENSE} from './wiktionary.js?v=13';
 import {Favorites} from './favorites.js';
 import {SharedDecks,installSharedDecks} from './shared-decks.js';
 import {normalize,uid,localDate,addDays,checkAnswer,shuffle,makeEvent,appendEvent,derive,reviewQueue,nextModule,selectContext,validatePackage,mergePackage,validateBackup,learningTotals} from './core.js';
@@ -36,13 +36,8 @@ function sourceCredit(entry){
 function pronunciationHTML(entry){
   const variants=Array.isArray(entry.pronunciations)?entry.pronunciations.filter(v=>v&&typeof v.ipa==='string'&&v.ipa.length<=120).slice(0,4):[];
   return `<div class="dictionary-pronunciation">
-    ${variants.length?variants.map(v=>{
-      const audio=audioURL(v.audio_url),file=typeof v.audio_file==='string'?v.audio_file.slice(0,200):'';
-      return `<div><p class="dictionary-ipa" lang="en">[${esc(v.ipa)}]</p>
-        ${audio?`<audio controls preload="none" src="${esc(audio)}" aria-label="Запись произношения ${esc(entry.word)}"></audio>${file?`<p class="dictionary-source"><a href="${esc(audioCredit(file))}" target="_blank" rel="noopener noreferrer">Запись и её лицензия · Wikimedia Commons</a></p>`:''}`:''}
-      </div>`;
-    }).join(''):`<p class="tiny">${entry.pronunciations===null||entry.pronunciations===undefined?'Транскрипция ещё не загружена.':'В статье нет транскрипции.'}</p>`}
-    ${btn(icon('sound')+' Голос устройства','dictionary-speak','text-btn',`data-word="${esc(entry.word)}" aria-label="Произнести ${esc(entry.word)} голосом устройства"`)}
+    ${variants.length?variants.map(v=>`<p class="dictionary-ipa" lang="en">[${esc(v.ipa)}]</p>`).join(''):`<p class="tiny">${entry.pronunciations===null||entry.pronunciations===undefined?'Транскрипция ещё не загружена.':'В статье нет транскрипции.'}</p>`}
+    ${btn(icon('sound')+' Озвучить','dictionary-speak','text-btn',`data-word="${esc(entry.word)}" aria-label="Озвучить ${esc(entry.word)}"`)}
   </div>`;
 }
 function pronounceWord(word,language='en-GB'){
@@ -468,7 +463,7 @@ async function actions(action,el){
       const original=entries.find(e=>e.translation===row.translation);
       if(!original)throw new Error('Не удалось найти сохранённое значение в исходной статье.');
       await target.addPronunciations(row,original.pronunciations);
-      if(target===favorites)toast(original.pronunciations.length?'Произношение сохранено.':'В исходной статье нет транскрипции. Доступен голос устройства.');
+      if(target===favorites)toast(original.pronunciations.length?'Произношение сохранено.':'В исходной статье нет транскрипции. Доступна кнопка «Озвучить».');
     }finally{
       target.pending.delete(row.entry_key);
       if(target===favorites&&route==='favorites'){
