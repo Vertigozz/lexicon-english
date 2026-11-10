@@ -316,3 +316,13 @@ a.btn { text-decoration: none; }
 }
 .dictionary-pronunciation { margin:.5rem 0 .75rem; }
 .dictionary-ipa { font-size:1rem; color:var(--muted); margin:.35rem 0; overflow-wrap:anywhere; }
+
+.exercise-card.with-speech { position: relative; }
+.exercise-card .exercise-speak { position:absolute; top:1rem; right:1rem; }
+.exercise-card.with-speech .exercise-kicker {
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding-inline:44px;
+}
