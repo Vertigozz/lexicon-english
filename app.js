@@ -12,6 +12,8 @@ import {accountPanel,statusText,registrationForm} from './account-panel.js?v=8';
 import {CATALOG_ID,CATALOG_URL,installCatalog,finishPendingCatalogActivation} from './catalog.js';
 import {copy,contextSources,courseSourcesHTML} from './credits.js';
 import {cloudConfig} from './cloud-config.js';
+import {speakingConfig} from './speaking-config.js';
+let speakingView, unmountSpeaking, speakingAccount;
 let bundledCatalog,cloud,accountUser=null,scope='guest',lastSaved=null,guestAvailable=false;
 const cloudStatus={mode:'guest',at:null,error:'',saving:false,localError:false};
 let deviceId;try{deviceId=localStorage.getItem('lexicon-device-id')||crypto.randomUUID();localStorage.setItem('lexicon-device-id',deviceId);}catch{deviceId=crypto.randomUUID();}
@@ -162,6 +164,7 @@ async function startCloud(){
     changed:async saved=>{if(scope!==cloud.user?.id)return;const before=JSON.stringify(state.session);applySaved(saved);lastSaved=structuredClone(saved);if(route!=='study'||before!==JSON.stringify(state.session))render();},
     account:async user=>{
       const nextScope=user?.id||'guest';
+      if (speakingView && speakingAccount !== user?.id) clearSpeaking();
       if(nextScope!==scope){
         if(!await save(false))throw new Error('Сначала сохраните локальные результаты в резервную копию.');
         const next=await readState(nextScope);
@@ -281,9 +284,10 @@ function log(type,data){appendEvent(state,makeEvent(state,type,data));}
 function navigate(next){route=next;location.hash=next;render();window.scrollTo({top:0,behavior:'instant'});}
 function stats(){const p=progress(),ms=Object.values(p.modules),q=reviewQueue(state),learned=ms.filter(m=>m.covered).length;return {p,ms,q,learned,...learningTotals(state,p),mastered:ms.filter(m=>m.stage===5).length,hard:Object.values(p.difficult),due:q.filter(m=>m.nextDate===today()).length,overdue:q.filter(m=>m.nextDate<today()).length};}
 function sidebar(){const nav=[['dashboard','grid','Обзор'],['today','calendar','Сегодня'],['vocabulary','book','Словарь'],['roadmap','map','Карта'],['statistics','chart','Статистика']];const q=reviewQueue(state).length;
-  return `<aside class="sidebar"><a href="#dashboard" class="brand" aria-label="Lexicon, главная"><span class="brand-mark">${icon('book')}</span>lexicon<span class="brand-dot">.</span></a><div class="sidebar-label">ВАШЕ УЧЕБНОЕ ПРОСТРАНСТВО</div><nav aria-label="Главная навигация">${nav.map(([r,i,t])=>`<a href="#${r}" class="nav-item ${(route===r||r==='vocabulary'&&dictionaryRoutes.includes(route))?'active':''}" ${(route===r||r==='vocabulary'&&dictionaryRoutes.includes(route))?'aria-current="page"':''}>${icon(i)}<span>${t}</span>${r==='today'&&q?`<span class="nav-count">${q}</span>`:''}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="quiet-note"><div class="quiet-icon">${icon('leaf')}</div><strong>В своём ритме</strong><p>Не гонитесь за количеством.<br>Дайте словам остаться с вами.</p><span class="tiny">НЕМНОГО КАЖДЫЙ ДЕНЬ</span></div><a href="#settings" class="nav-item ${route==='settings'?'active':''}">${icon('settings')}<span>Настройки</span></a><button class="nav-item help-btn" data-action="help">${icon('help')}<span>Как это работает</span></button><div class="local-status"><span></span> ${accountUser?'Прогресс привязан к аккаунту':'Без аккаунта · только этот браузер'}</div></div></aside>`;
+  if (speakingConfig.enabled) nav.push(['speaking','sound','Разговорная практика']);
+  return `<aside class="sidebar"><a href="#dashboard" class="brand" aria-label="Lexicon, главная"><span class="brand-mark">${icon('book')}</span>lexicon<span class="brand-dot">.</span></a><div class="sidebar-label">ВАШЕ УЧЕБНОЕ ПРОСТРАНСТВО</div><nav aria-label="Главная навигация">${nav.map(([r,i,t])=>`<a href="#${r}" class="nav-item ${r==='speaking'?'speaking-nav':''} ${(route===r||r==='vocabulary'&&dictionaryRoutes.includes(route))?'active':''}" ${(route===r||r==='vocabulary'&&dictionaryRoutes.includes(route))?'aria-current="page"':''}>${icon(i)}<span>${t}</span>${r==='today'&&q?`<span class="nav-count">${q}</span>`:''}</a>`).join('')}</nav><div class="sidebar-bottom"><div class="quiet-note"><div class="quiet-icon">${icon('leaf')}</div><strong>В своём ритме</strong><p>Не гонитесь за количеством.<br>Дайте словам остаться с вами.</p><span class="tiny">НЕМНОГО КАЖДЫЙ ДЕНЬ</span></div><a href="#settings" class="nav-item ${route==='settings'?'active':''}">${icon('settings')}<span>Настройки</span></a><button class="nav-item help-btn" data-action="help">${icon('help')}<span>Как это работает</span></button><div class="local-status"><span></span> ${accountUser?'Прогресс привязан к аккаунту':'Без аккаунта · только этот браузер'}</div></div></aside>`;
 }
-function shell(body){const titles={dashboard:'Обзор',today:'Сегодня',vocabulary:'Словарь',dictionary:'Найти перевод',favorites:'Избранное',roadmap:'Карта',statistics:'Статистика',settings:'Настройки',study:'Тренировка'};
+function shell(body){const titles={dashboard:'Обзор',today:'Сегодня',vocabulary:'Словарь',dictionary:'Найти перевод',favorites:'Избранное',roadmap:'Карта',statistics:'Статистика',settings:'Настройки',study:'Тренировка',speaking:'Разговорная практика'};
   return `${sidebar()}<div class="workspace"><header class="topbar"><div class="breadcrumb"><span class="breadcrumb-prefix">Моё пространство</span> ${icon('chevron')} <span>${titles[route]||'Обзор'}</span></div><div class="top-actions"><span class="local-pill">${icon('lock')} Личное пространство</span><button class="icon-btn" data-action="theme" aria-label="${state.settings.theme==='dark'?'Светлая':'Тёмная'} тема">${icon(state.settings.theme==='dark'?'sun':'moon')}</button><button class="icon-btn" data-action="notifications" aria-label="Очередь повторений">${icon('bell')}${reviewQueue(state).length?'<i class="notification-dot"></i>':''}</button><a href="#settings" class="profile-link" aria-label="Настройки профиля">${icon('settings')}<span>Настройки</span></a></div></header><main id="content" tabindex="-1">${storageError?`<div class="notice error">${icon('info')}${esc(storageError)} ${btn('Скачать копию','backup','small')}</div>`:''}${!navigator.onLine?'<div class="notice">Вы офлайн. Слова и прогресс доступны на этом устройстве.</div>':''}${body}</main><footer><span>Lexicon · Пространство для роста</span><span>${icon('check')} <span id="save-state">${esc(statusText(cloudStatus,accountUser))}</span></span></footer></div>`;
 }
 function heading(title,sub,action=''){return `<div class="page-heading"><div><div class="eyebrow">${esc(new Intl.DateTimeFormat('ru',{weekday:'long',day:'numeric',month:'long',timeZone:state.settings.timeZone}).format(new Date()))}</div><h1>${title}</h1>${sub?`<p>${sub}</p>`:''}</div>${action}</div>`;}
@@ -305,6 +309,7 @@ function dashboard(){const s=stats(),n=nextModule(state),ratio=deck().words.leng
     </div>
     ${progressRing(ratio,`${formatCount(s.learnedWords)} из ${formatCount(deck().words.length)}`,'Изучено слов')}
   </section>
+  ${speakingConfig.enabled?'<section class="neo speaking-entry"><div><h2>Разговорная практика</h2><p>Короткий голосовой звонок с AI-тьютором.</p></div><a class="btn subtle" href="#speaking">Открыть</a></section>':''}
   <div class="stat-grid"><div class="neo stat"><span class="stat-icon blue">${icon('book')}</span><div><span>Изучено слов</span><strong>${s.learnedWords}<small>из ${deck().words.length} · уже знаю: ${s.knownWords}</small></strong></div></div><div class="neo stat"><span class="stat-icon violet">${icon('repeat')}</span><div><span>Повторить сегодня</span><strong>${s.due}<small>${s.overdue?'ещё '+s.overdue+' просрочено':'по вашему плану'}</small></strong></div></div><div class="neo stat"><span class="stat-icon green">${icon('check')}</span><div><span>Модулей пройдено</span><strong>${s.learned}<small>из ${new Set(deck().words.map(w=>w.module)).size} загруженных</small></strong></div></div></div>
   <div class="section-title"><h2>Ваш следующий шаг</h2><a href="#today">Весь план ${icon('arrow')}</a></div><div class="next-grid"><section class="neo task-card"><div class="task-top"><span class="tile-icon lavender">${icon('repeat')}</span>${badge(ready?(s.overdue?'Есть просроченные':'Время вспомнить'):'Всё по плану',ready?'warning':'success')}</div><h3>Повторить и закрепить</h3><p>${ready?`${day(next.module)} · R${next.stage+1}<br>${next.count} слов, новые контексты.`:'Пока нет обязательных повторений.<br>После изучения они появятся здесь.'}</p><div class="task-footer"><span>${icon('clock')} ${ready?'~ 10 минут':'Интервалы 1 → 2 → 4 → 7 → 16'}</span>${ready||hardDue?'<a href="#today">К очереди</a>':''}</div></section><section class="neo task-card"><div class="task-top"><span class="tile-icon peach">${icon('spark')}</span>${badge(n?day(n):'Все слова изучены','muted')}</div><h3>${n?'Слова для изучения':'Продолжайте повторять'}</h3><p>${n?`${wordsOf(n).filter(w=>!s.p.known.has(w.id)&&s.p.wordProgress[w.id].stage<0).slice(0,3).map(w=>esc(w.word)).join(' · ')}…<br>${ready?'Сначала закрепим предыдущие слова.':'Небольшой шаг к большому словарю.'}`:'Первичное изучение завершено.<br>Теперь слова проходят цикл SRS.'}</p><div class="task-footer"><span>${icon('book')} ${n?'Новый модуль':'Долговременная память'}</span>${n&&!ready&&!hardDue&&!pending?'<a href="#today">Открыть план</a>':''}</div></section></div>
   <section class="neo roadmap-preview"><div class="panel-title"><div><h2>Путь к ${deck().words.length} словам</h2><p>Один модуль. Десять слов. Ещё немного уверенности.</p></div><a class="text-link" href="#roadmap">Вся карта ${icon('arrow')}</a></div><div class="mini-modules">${Array.from({length:10},(_,i)=>miniModule(i+1)).join('')}</div><div class="roadmap-caption"><span><i class="dot blue-dot"></i> Следующий модуль</span><span><i class="dot"></i> Впереди</span><span class="caption-right">${s.learned} / 100 модулей</span></div></section>
@@ -450,7 +455,54 @@ async function completeSession(){const a=state.session;if(!a||a.phase==='result'
 function resultPage(a){const r=a.result,p=progress(),m=p.modules[a.module],nextReview=reviewQueue(state,'9999-12-31').find(g=>g.module===a.module),count=a.wordIds.length,counts=r.counts||{recall:a.kind==='final'?50:count,gaps:a.kind==='final'?20:count,enru:100},missed=r.missed.filter(id=>!p.known.has(id));return `<div class="result-container"><div class="result-heading"><span class="result-medallion ${r.success?'':'retry'}">${icon(r.success?'check':'repeat')}</span><div class="eyebrow">${a.kind==='difficult'?'Дополнительная практика':a.kind==='final'?'Итоговая проверка':day(a.module)}</div><h1>${r.success?'Ещё один шаг вперёд.':'Закрепим ещё немного.'}</h1><p>${r.success?(cloudStatus.localError?'Не удалось сохранить результат. Скачайте резервную копию в настройках.':'Проверка завершена. Здесь показаны ваши результаты.'):`Для успеха нужно минимум ${Math.ceil(counts.recall*.8)} из ${counts.recall} в Active Recall и ${Math.ceil(counts.gaps*.8)} из ${counts.gaps} в Fill in the Gaps.`}</p><p id="result-save-state" role="status">${esc(statusText(cloudStatus,accountUser))}</p></div><div class="result-scores">${a.kind==='final'?`<section class="neo"><span>English → Русский</span><strong>${r.scores.enru}<em> / 100</em></strong></section>`:''}<section class="neo"><span>Active Recall</span><strong>${r.scores.recall}<em> / ${counts.recall}</em></strong>${badge(r.scores.recall>=Math.ceil(counts.recall*.8)?'Порог достигнут':'Нужна практика',r.scores.recall>=Math.ceil(counts.recall*.8)?'success':'warning')}</section><section class="neo"><span>Fill in the Gaps</span><strong>${r.scores.gaps}<em> / ${counts.gaps}</em></strong>${badge(r.scores.gaps>=Math.ceil(counts.gaps*.8)?'Порог достигнут':'Нужна практика',r.scores.gaps>=Math.ceil(counts.gaps*.8)?'success':'warning')}</section></div>${a.kind==='initial'||a.kind==='review'?`<div class="notice ${r.success?'success':''}">${icon('calendar')} ${r.success?(nextReview?`Следующее повторение: ${fmt(nextReview.nextDate,true)} · R${nextReview.stage+1}.`:'Поздравляем! Для этого модуля завершён весь цикл R1–R5.'):(a.kind==='review'?`Этап SRS сохранён. Повторная проверка — ${fmt(m.nextDate,true)}.`:'Модуль ещё не изучен. Повторите материалы и попробуйте снова.')}</div>`:''}${missed.length?`<section class="neo result-errors"><h2>Слова для закрепления: ${missed.length}</h2><p>Дополнительная проверка назначена на ${fmt(addDays(today(),1),true)}.</p>${a.answers.filter(x=>!x.correct&&!p.known.has(x.wordId)).map(e=>{const w=deck().words.find(w=>w.id===e.wordId),c=w.clozeItems.find(c=>c.id===e.exerciseId);return `<div class="error-review"><div><strong>${esc(w.word)}</strong>${badge(e.typo?'Опечатка':phaseLabel(e.exerciseType),'muted')}</div><p><s>${esc(e.answer)}</s> ${icon('arrow')} <strong>${esc(c?.acceptedAnswers[0]||w.word)}</strong></p><p lang="en">${esc(c?c.en.replace('{{gap}}',c.acceptedAnswers[0]):w.examples[0].en)}</p><span>${esc(c?.ru||w.examples[0].ru||w.translations.join('; '))}</span></div>`;}).join('')}</section>`:'<p class="perfect-note">'+icon('spark')+' Ни одного слова в списке сложных. Отличная работа.</p>'}<div class="button-row centered">${btn('Вернуться к обзору','finish','subtle')}${btn(r.success?'К плану на сегодня '+icon('arrow'):'Попробовать ещё раз '+icon('repeat'),'after-result','primary')}</div><p class="tiny center">Один успешный тест — начало. Долговременная память формируется повторениями.</p></div>`;}
 
 async function startFinal(){const p=progress(),numbers=[...new Set(deck().words.map(w=>w.module))];if(deck().words.length<1000||numbers.length<100||deck().words.some(w=>!p.known.has(w.id)&&p.wordProgress[w.id]?.stage!==5)||Object.keys(p.difficult).length){toast('Итоговая проверка откроется после загрузки 1000 слов, R5 или отметки «Уже знаю» для каждого слова и закрытия сложных слов.');return;}if(hasPendingSession())return;const tasks=[...shuffle(deck().words).slice(0,100).map(w=>({type:'enru',wordId:w.id})),...shuffle(deck().words).slice(0,50).map(w=>({type:'recall',wordId:w.id})),...shuffle(deck().words).slice(0,20).map(w=>{const c=selectContext(w,p.used);return {type:'gaps',wordId:w.id,exerciseId:c.id,reused:p.used.has(c.id)};})];state.session={id:uid(),deckId:state.activeDeckId,module:null,kind:'final',stage:5,startedAt:new Date().toISOString(),wordIds:[...new Set(tasks.map(t=>t.wordId))],tasks,phase:'enru',index:0,answers:[],input:'',feedback:null};log('session_started',{sessionId:state.session.id,kind:'final'});await save();navigate('study');}
-function render(){document.documentElement.dataset.theme=state.settings.theme;$('#app').dataset.route=route;const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,dictionary:externalDictionaryPage,favorites:favoritesPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage};$('#app').innerHTML=shell((['dictionary','favorites'].includes(route)?'':deckBar())+(pages[route]||dashboard)());if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());}
+function speakingPage(){
+  const title=heading('Разговорная практика','');
+  if(!speakingConfig.enabled)return title+'<p>Раздел пока недоступен.</p>';
+  if(!accountUser)return title+'<p><a class="btn primary" href="#settings">Войти в Lexicon</a></p>';
+  return title+'<div id="speaking-root"><p role="status">Загружаем голосовой раздел…</p></div>';
+}
+function clearSpeaking(){
+  const closing=unmountSpeaking?.();
+  unmountSpeaking=undefined;
+  speakingView=undefined;
+  speakingAccount=undefined;
+  return closing;
+}
+function mountSpeakingPage(){
+  const root=$('#speaking-root');
+  if(!root)return;
+  speakingView=root;
+  speakingAccount=accountUser.id;
+  import('./speaking.js?v=1').then(({mountSpeaking})=>{
+    if(speakingView!==root||route!=='speaking')return;
+    unmountSpeaking=mountSpeaking(root,{
+      endpoint:speakingConfig.endpoint||new URL('/functions/v1/tutor',cloudConfig.url).href,
+      publishableKey:cloudConfig.publishableKey,
+      getAccessToken:async()=>{
+        const {data}=await cloud.client.auth.getSession();
+        return data.session?.user.id===speakingAccount?data.session.access_token:null;
+      },
+    });
+  }).catch(()=>{if(speakingView===root)root.textContent='Не удалось загрузить голосовой раздел. Обнови страницу.';});
+}
+function render(){
+  document.documentElement.dataset.theme=state.settings.theme;
+  const app=$('#app');
+  if(route==='speaking'&&speakingView&&speakingAccount===accountUser?.id){
+    const themeButton=app.querySelector('[data-action="theme"]');
+    const dark=state.settings.theme==='dark';
+    themeButton?.setAttribute('aria-label',dark?'Светлая тема':'Тёмная тема');
+    if(themeButton)themeButton.innerHTML=icon(dark?'sun':'moon');
+    paintCloudStatus();
+    return;
+  }
+  if(speakingView)clearSpeaking();
+  app.dataset.route=route;
+  const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,dictionary:externalDictionaryPage,favorites:favoritesPage,roadmap:roadmapPage,statistics:statisticsPage,settings:settingsPage,study:studyPage,speaking:speakingPage};
+  app.innerHTML=shell((['dictionary','favorites','speaking'].includes(route)?'':deckBar())+(pages[route]||dashboard)());
+  if(route==='speaking')mountSpeakingPage();
+  if(route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>$('#answer')?.focus());
+}
 async function actions(action,el){
   if(action==='close')return closeModal();
   if(action==='dictionary-speak')return pronounceWord(el.dataset.word);

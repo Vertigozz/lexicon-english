@@ -1,0 +1,314 @@
+import { createLocalAudioTrack, Room, RoomEvent, Track } from './vendor/livekit.js';
+
+const phases = {
+  starting: 'Подключаем тьютора…',
+  speaking: 'Говорит тьютор',
+  listening: 'Твой ход. Нажми «Готово», когда закончишь.',
+  thinking: 'Тьютор готовит ответ…',
+  reconnecting: 'Восстанавливаем связь…',
+};
+const errors = {
+  AUTH_REQUIRED: 'Войди в аккаунт Lexicon и попробуй снова.',
+  NOT_ELIGIBLE: 'Для этого аккаунта тест пока не открыт.',
+  PILOT_DISABLED: 'Голосовой тест пока не включён.',
+  PILOT_BUSY: 'Другой тестовый звонок ещё открыт. Попробуй чуть позже.',
+  USER_QUOTA: 'Достигнут лимит запусков. Попробуй позже.',
+  START_FAILED: 'Не удалось запустить комнату. Попробуй позже.',
+  SERVICE_UNAVAILABLE: 'Сервис звонков временно недоступен.',
+};
+const decoder = new TextDecoder();
+
+export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }) {
+  root.innerHTML = `
+    <section class="neo speaking-panel" aria-label="Голосовой урок">
+      <div class="speaking-media" hidden>
+        <video aria-label="Видео аватара Obvious Thrush" playsinline muted autoplay></video>
+        <audio autoplay></audio>
+      </div>
+      <div class="speaking-copy">
+        <p class="speaking-intro">Поговори по-английски с AI-тьютором. Тестовый звонок длится до пяти минут.</p>
+        <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Simli озвучивает аватар. Lexicon не сохраняет запись или расшифровку.</p>
+        <p class="speaking-status" role="status" aria-live="polite"></p>
+        <p class="speaking-caption" lang="en" aria-live="polite" hidden></p>
+        <div class="speaking-controls">
+          <button class="btn primary speaking-start">Начать звонок</button>
+          <button class="btn primary speaking-unlock" hidden>Включить звук</button>
+          <button class="btn primary speaking-done" hidden>Готово</button>
+          <button class="btn subtle speaking-mic" hidden>Выключить микрофон</button>
+          <button class="btn subtle speaking-end" hidden>Завершить</button>
+        </div>
+      </div>
+    </section>`;
+  const find = selector => root.querySelector(selector);
+  const media = find('.speaking-media');
+  const video = find('video');
+  const audio = find('audio');
+  const status = find('.speaking-status');
+  const caption = find('.speaking-caption');
+  const start = find('.speaking-start');
+  const unlock = find('.speaking-unlock');
+  const done = find('.speaking-done');
+  const mic = find('.speaking-mic');
+  const end = find('.speaking-end');
+  let current;
+  let closing;
+  let disposed = false;
+
+  async function api(method, accessToken, sessionId) {
+    const url = new URL(endpoint);
+    if (sessionId) url.searchParams.set('sessionId', sessionId);
+    const response = await fetch(url, {
+      method, headers: { Authorization: `Bearer ${accessToken}`, apikey: publishableKey },
+      cache: 'no-store', keepalive: method === 'DELETE', signal: AbortSignal.timeout(24_000),
+    });
+    if (response.status === 204) return null;
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(errors[data.code] || errors.SERVICE_UNAVAILABLE);
+    return data;
+  }
+
+  function render(message) {
+    if (disposed) return;
+    start.hidden = Boolean(current);
+    start.disabled = Boolean(closing);
+    end.hidden = !current;
+    unlock.hidden = !current?.workerReady || current.unlocked && !current.audioBlocked;
+    done.hidden = current?.phase !== 'listening';
+    mic.hidden = !current?.unlocked || !['speaking', 'listening', 'thinking'].includes(current.phase);
+    done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
+    mic.disabled = current?.phase !== 'listening';
+    mic.textContent = current?.paused ? 'Включить микрофон' : 'Выключить микрофон';
+    if (message !== undefined) status.textContent = message;
+    else if (current?.workerReady && (!current.unlocked || current.audioBlocked)) {
+      status.textContent = 'Нажми «Включить звук», чтобы услышать тьютора.';
+    } else status.textContent = phases[current?.phase] || '';
+  }
+
+  function setPhase(call, state) {
+    if (current !== call || !Number.isSafeInteger(state.seq) || state.seq < call.seq) return;
+    call.seq = state.seq;
+    if (state.phase === 'error') {
+      void stop('Аватар не успел подключиться. Попробуй начать звонок снова.');
+      return;
+    }
+    if (state.phase === 'ended') {
+      void stop('Время тестового звонка закончилось.');
+      return;
+    }
+    if (!Object.hasOwn(phases, state.phase)) return;
+    call.phase = state.phase;
+    call.turn = state.turn;
+    if (state.phase !== 'starting') clearTimeout(call.startupTimer);
+    updateMicrophone(call);
+    render();
+  }
+
+  function updateMicrophone(call) {
+    if (!call.track || current !== call) return;
+    call.track.mediaStreamTrack.enabled = call.phase === 'listening' && call.unlocked && !call.paused && !call.audioBlocked;
+  }
+
+  function rpc(call, method, payload = '') {
+    return call.room.localParticipant.performRpc({
+      destinationIdentity: call.connection.workerIdentity, method, payload, responseTimeout: 4_000,
+    }).then(value => JSON.parse(value));
+  }
+
+  async function release(call) {
+    if (call.released || !call.connection) return;
+    call.released = true;
+    await api('DELETE', call.accessToken, call.connection.sessionId).catch(() => {});
+  }
+
+  async function stop(message = 'Звонок завершён.') {
+    const call = current;
+    if (!call) return;
+    current = undefined;
+    clearTimeout(call.timer);
+    clearTimeout(call.startupTimer);
+    call.track?.stop();
+    call.videoTrack?.detach(video);
+    call.audioTrack?.detach(audio);
+    video.srcObject = null;
+    audio.srcObject = null;
+    media.hidden = true;
+    caption.hidden = true;
+    caption.textContent = '';
+    closing = Promise.allSettled([call.room.disconnect(), release(call)]);
+    render(message);
+    await closing;
+    closing = undefined;
+    render(message);
+  }
+
+  async function begin() {
+    if (current || closing || disposed) return;
+    if (!navigator.onLine || !navigator.mediaDevices?.getUserMedia) {
+      render('Для звонка нужны интернет и доступ к микрофону по HTTPS.');
+      return;
+    }
+    const room = new Room({ adaptiveStream: true, disconnectOnPageLeave: true });
+    const call = { room, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
+    current = call;
+    render();
+    try {
+      // Unlock playback and request permission from the explicit Start gesture.
+      const audioUnlocked = room.startAudio().then(() => true, () => false);
+      const track = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+      if (current !== call) { track.stop(); return; }
+      call.track = track;
+      track.mediaStreamTrack.addEventListener('ended', () => {
+        if (current === call) void stop('Доступ к микрофону потерян. Проверь настройки и начни звонок снова.');
+      });
+      updateMicrophone(call);
+      call.audioUnlocked = await audioUnlocked;
+      if (current !== call) return;
+      call.accessToken = await getAccessToken();
+      if (current !== call) return;
+      if (!call.accessToken) { await stop(errors.AUTH_REQUIRED); return; }
+      call.connection = await api('POST', call.accessToken);
+      if (current !== call) { await release(call); return; }
+      const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt } = call.connection;
+      call.timer = setTimeout(() => void stop('Время тестового звонка закончилось.'), Math.max(0, Date.parse(endsAt) - Date.now()));
+
+      const subscribe = (publication, participant) => {
+        if (participant.identity === avatarIdentity) publication.setSubscribed(true);
+      };
+      room.on(RoomEvent.TrackPublished, subscribe);
+      room.on(RoomEvent.TrackSubscribed, (remote, publication, participant) => {
+        if (current !== call || participant.identity !== avatarIdentity) return;
+        if (remote.kind === Track.Kind.Video) {
+          call.videoTrack?.detach(video);
+          call.videoTrack = remote;
+          remote.attach(video);
+          video.muted = true;
+          media.hidden = false;
+        } else if (remote.kind === Track.Kind.Audio) {
+          call.audioTrack?.detach(audio);
+          call.audioTrack = remote;
+          remote.attach(audio);
+        }
+      });
+      room.on(RoomEvent.TrackUnsubscribed, remote => {
+        if (current !== call) return;
+        if (remote === call.videoTrack) { remote.detach(video); media.hidden = true; }
+        if (remote === call.audioTrack) remote.detach(audio);
+      });
+      room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
+        if (current !== call) return;
+        call.audioBlocked = !room.canPlaybackAudio;
+        updateMicrophone(call);
+        render();
+      });
+      room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+        if (current !== call || participant?.identity !== workerIdentity) return;
+        let data;
+        try { data = JSON.parse(decoder.decode(payload)); } catch { return; }
+        if (topic === 'lexicon.state') setPhase(call, data);
+        if (topic === 'lexicon.caption' && typeof data.text === 'string') {
+          caption.textContent = data.text;
+          caption.hidden = false;
+        }
+      });
+      room.on(RoomEvent.Reconnecting, () => {
+        if (current !== call) return;
+        call.phase = 'reconnecting';
+        call.paused = true;
+        updateMicrophone(call);
+        render();
+      });
+      room.on(RoomEvent.Reconnected, () => {
+        if (current !== call) return;
+        room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
+        if (call.workerReady) rpc(call, 'lexicon.status').then(state => setPhase(call, state)).catch(() => void stop('Связь не восстановилась.'));
+      });
+      room.on(RoomEvent.Disconnected, () => {
+        if (current === call) void stop('Соединение завершено. Можно начать новый звонок.');
+      });
+      room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
+      await room.connect(serverUrl, participantToken, { autoSubscribe: false, maxRetries: 0, websocketTimeout: 10_000 });
+      if (current !== call) { await room.disconnect(); return; }
+      room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
+      for (const participant of room.remoteParticipants.values()) {
+        for (const publication of participant.trackPublications.values()) subscribe(publication, participant);
+      }
+      await room.localParticipant.publishTrack(track, { source: Track.Source.Microphone });
+      const waitUntil = Date.now() + 12_000;
+      while (current === call && Date.now() < waitUntil) {
+        try {
+          setPhase(call, await rpc(call, 'lexicon.status'));
+          break;
+        } catch {
+          await new Promise(resolve => setTimeout(resolve, 400));
+        }
+      }
+      if (current !== call) return;
+      if (call.seq === -1) { await stop('Тьютор не подключился. Попробуй начать звонок снова.'); return; }
+      call.workerReady = true;
+      if (call.audioUnlocked && room.canPlaybackAudio) await ready(call);
+      else render();
+    } catch (error) {
+      if (current !== call) return;
+      const denied = error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError';
+      await stop(denied ? 'Разреши микрофон в настройках браузера и попробуй снова.' :
+        error.name === 'NotFoundError' ? 'Микрофон не найден.' :
+        errors.AUTH_REQUIRED === error.message || Object.values(errors).includes(error.message) ? error.message :
+        'Не удалось подключить звонок. Проверь интернет и попробуй снова.');
+    }
+  }
+
+  async function ready(call) {
+    if (current !== call || call.readyPending) return;
+    call.readyPending = true;
+    try {
+      await call.room.startAudio();
+      if (current !== call) return;
+      if (!call.unlocked) {
+        const state = await rpc(call, 'lexicon.ready');
+        if (current !== call) return;
+        call.startupTimer = setTimeout(() => void stop('Тьютор не успел ответить. Попробуй начать звонок снова.'), 32_000);
+        setPhase(call, state);
+      }
+      call.unlocked = true;
+      call.audioBlocked = false;
+      updateMicrophone(call);
+      render();
+    } catch {
+      if (current === call) render('Не удалось включить звук. Нажми «Включить звук» ещё раз.');
+    } finally {
+      call.readyPending = false;
+    }
+  }
+
+  start.addEventListener('click', () => void begin());
+  unlock.addEventListener('click', () => { if (current) void ready(current); });
+  end.addEventListener('click', () => void stop());
+  mic.addEventListener('click', () => {
+    if (current?.phase !== 'listening') return;
+    current.paused = !current.paused;
+    updateMicrophone(current);
+    render();
+  });
+  done.addEventListener('click', async () => {
+    const call = current;
+    if (!call || call.phase !== 'listening' || call.sending || call.paused || call.audioBlocked) return;
+    call.sending = true;
+    render();
+    try {
+      setPhase(call, await rpc(call, 'lexicon.commit', String(call.turn)));
+    } catch {
+      try { setPhase(call, await rpc(call, 'lexicon.status')); }
+      catch { if (current === call) render('Ответ не подтверждён. Проверь соединение и повтори.'); }
+    } finally {
+      call.sending = false;
+      render(status.textContent);
+    }
+  });
+  const onLeave = () => void stop();
+  window.addEventListener('pagehide', onLeave);
+  return () => {
+    disposed = true;
+    window.removeEventListener('pagehide', onLeave);
+    return stop();
+  };
+}

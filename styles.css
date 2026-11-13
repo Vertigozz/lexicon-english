@@ -326,3 +326,27 @@ a.btn { text-decoration: none; }
   justify-content:center;
   padding-inline:44px;
 }
+
+/* Speaking Tutor uses the shared Lexicon theme and stays out of the mobile tab bar. */
+.speaking-entry { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:20px; margin:16px 0; }
+.speaking-entry h2,.speaking-entry p { margin:0; }
+.speaking-entry h2 { font-size:1.125rem; }
+.speaking-entry p { margin-top:.35rem; color:var(--muted); font-size:.95rem; }
+.speaking-panel { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; max-width:850px; padding:clamp(16px,3vw,28px); margin-bottom:20px; }
+.speaking-panel:has(.speaking-media:not([hidden])) { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.speaking-media { align-self:start; border-radius:14px; overflow:hidden; background:var(--line); }
+.speaking-media video { display:block; width:100%; aspect-ratio:1; object-fit:contain; }
+.speaking-copy { min-width:0; }
+.speaking-copy p { margin:0 0 .75rem; font-size:1rem; line-height:1.5; overflow-wrap:anywhere; }
+.speaking-privacy { color:var(--muted); }
+.speaking-status { font-weight:650; }
+.speaking-status:empty { display:none; }
+.speaking-caption { padding:12px; border:1px solid var(--line); border-radius:10px; }
+.speaking-controls { display:flex; flex-wrap:wrap; gap:10px; }
+.speaking-controls .btn,.speaking-entry .btn { min-height:44px; }
+.speaking-panel [hidden] { display:none !important; }
+@media (max-width:767px) {
+  .sidebar .speaking-nav { display:none; }
+  .speaking-panel:has(.speaking-media:not([hidden])) { grid-template-columns:minmax(0,1fr); }
+  .speaking-media video { max-height:36dvh; }
+}
