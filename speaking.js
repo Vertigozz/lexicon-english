@@ -23,6 +23,7 @@ const decoder = new TextDecoder();
 const pauseKey = 'lexicon-speaking-pause-ms';
 const tutorSettingsKey = 'lexicon-speaking-tutor-settings';
 const tutorFields = {
+  voiceModel: { label: 'Модель', defaultValue: 'mini', choices: [['mini', 'GPT Realtime 2.1 Mini'], ['live', 'GPT‑Live‑1']] },
   opening: { label: 'Кто начинает разговор', defaultValue: 'tutor', choices: [['tutor', 'Тьютор'], ['learner', 'Я']] },
   replyLength: { label: 'Длина ответов', defaultValue: 'brief', choices: [['brief', 'Короткие · около 15 слов'], ['standard', 'Обычные · около 30 слов']] },
   feedback: { label: 'Исправление ошибок', defaultValue: 'on_request', choices: [['on_request', 'По просьбе'], ['off', 'Выключено']] },
@@ -67,6 +68,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
               </select>
             </div>`).join('')}
         </fieldset>
+        <p class="speaking-live-note" hidden>GPT‑Live‑1 сам определяет смену реплик и темп речи. Голосовая сессия OpenAI стоит $0,05 за минуту.</p>
         <p class="speaking-mode-current" hidden></p>
         <div class="speaking-controls">
           <button class="btn primary speaking-start">Начать звонок</button>
@@ -96,7 +98,12 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const pauseSelect = find('#speaking-pause');
   const tutorSettings = find('.speaking-tutor-settings');
   const tutorSelects = [...tutorSettings.querySelectorAll('select')];
-  const getPreferences = () => Object.fromEntries(tutorSelects.map(select => [select.name, select.value]));
+  const modelSelect = find('#speaking-voiceModel');
+  const speedSelect = find('#speaking-voiceSpeed');
+  const liveNote = find('.speaking-live-note');
+  const isLive = () => modelSelect.value === 'live';
+  const getPreferences = () => ({ ...Object.fromEntries(tutorSelects.map(select => [select.name, select.value])),
+    ...(isLive() ? { voiceSpeed: '1' } : {}) });
   try {
     const savedPause = localStorage.getItem(pauseKey);
     if (pauseOptions.has(savedPause)) pauseSelect.value = savedPause;
@@ -105,7 +112,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     const saved = JSON.parse(localStorage.getItem(tutorSettingsKey));
     for (const select of tutorSelects) {
       const value = saved?.[select.name];
-      if (tutorFields[select.name].choices.some(([choice]) => choice === value)) select.value = value;
+      if (select !== modelSelect && tutorFields[select.name].choices.some(([choice]) => choice === value)) select.value = value;
     }
   } catch {}
   const selectedMode = () => find('input[name="speaking-mode"]:checked').value;
@@ -135,13 +142,16 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     start.disabled = Boolean(closing);
     end.hidden = !current;
     unlock.hidden = !current?.workerReady || current.unlocked && !current.audioBlocked;
-    modePicker.hidden = Boolean(current);
+    modePicker.hidden = Boolean(current) || isLive();
     modePicker.disabled = Boolean(closing);
     tutorSettings.hidden = Boolean(current);
     tutorSettings.disabled = Boolean(closing);
+    speedSelect.closest('.speaking-option').hidden = isLive();
+    liveNote.hidden = Boolean(current) || !isLive();
     modeCurrent.hidden = !current;
     modeCurrent.textContent = current?.mode === 'auto' ? 'Смена реплик · Авто' : 'Смена реплик · Вручную';
     if (current?.pauseMs != null) modeCurrent.textContent += ` · ${pauseOptions.get(String(current.pauseMs))}`;
+    if (current) modeCurrent.textContent += ` · ${tutorFields.voiceModel.choices.find(([value]) => value === current.preferences.voiceModel)[1]}`;
     done.hidden = current?.mode !== 'manual' || current?.phase !== 'listening';
     mic.hidden = !current?.unlocked || !['speaking', 'listening', 'thinking'].includes(current.phase);
     done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
@@ -251,8 +261,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       return;
     }
     const room = new Room({ adaptiveStream: true, disconnectOnPageLeave: true });
-    const mode = selectedMode();
-    const pauseMs = mode === 'auto' && pauseSelect.value ? Number(pauseSelect.value) : null;
+    const mode = isLive() ? 'auto' : selectedMode();
+    const pauseMs = !isLive() && mode === 'auto' && pauseSelect.value ? Number(pauseSelect.value) : null;
     const preferences = getPreferences();
     const call = { room, mode, pauseMs, preferences, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
     current = call;
@@ -417,7 +427,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
 
   start.addEventListener('click', () => void begin());
   tutorSettings.addEventListener('change', () => {
-    try { localStorage.setItem(tutorSettingsKey, JSON.stringify(getPreferences())); } catch {}
+    const saved = Object.fromEntries(tutorSelects.filter(select => select !== modelSelect)
+      .map(select => [select.name, select.value]));
+    try { localStorage.setItem(tutorSettingsKey, JSON.stringify(saved)); } catch {}
+    render();
   });
   modePicker.addEventListener('change', event => {
     if (event.target === pauseSelect) {
