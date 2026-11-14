@@ -14,10 +14,14 @@ const errors = {
   PILOT_BUSY: 'Другой тестовый звонок ещё открыт. Попробуй чуть позже.',
   USER_QUOTA: 'Достигнут лимит запусков. Попробуй позже.',
   INVALID_MODE: 'Обнови страницу и выбери режим звонка снова.',
+  INVALID_PAUSE: 'Обнови страницу и выбери длительность паузы снова.',
   START_FAILED: 'Не удалось запустить комнату. Попробуй позже.',
   SERVICE_UNAVAILABLE: 'Сервис звонков временно недоступен.',
 };
 const decoder = new TextDecoder();
+const pauseKey = 'lexicon-speaking-pause-ms';
+const pauseOptions = new Map([['', 'По смыслу фразы'], ['1000', '1 секунда'], ['1500', '1,5 секунды'],
+  ['2000', '2 секунды'], ['2500', '2,5 секунды'], ['3000', '3 секунды'], ['4000', '4 секунды']]);
 
 export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }) {
   root.innerHTML = `
@@ -36,6 +40,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
           <label><input type="radio" name="speaking-mode" value="auto"> Авто</label>
           <label><input type="radio" name="speaking-mode" value="manual" checked> Вручную</label>
           <p id="speaking-mode-hint">Нажми «Готово», чтобы передать ход тьютору.</p>
+          <div class="speaking-pause" hidden>
+            <label for="speaking-pause">Пауза перед ответом</label>
+            <select id="speaking-pause" aria-describedby="speaking-pause-hint">
+              ${[...pauseOptions].map(([value, label]) => `<option value="${value}">${label}</option>`).join('')}
+            </select>
+            <p id="speaking-pause-hint">Если выбрать время, тьютор начнёт готовить ответ после указанной паузы в речи.</p>
+          </div>
         </fieldset>
         <p class="speaking-mode-current" hidden></p>
         <div class="speaking-controls">
@@ -61,15 +72,22 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const modePicker = find('.speaking-mode');
   const modeHint = find('#speaking-mode-hint');
   const modeCurrent = find('.speaking-mode-current');
+  const pauseSettings = find('.speaking-pause');
+  const pauseSelect = find('#speaking-pause');
+  try {
+    const savedPause = localStorage.getItem(pauseKey);
+    if (pauseOptions.has(savedPause)) pauseSelect.value = savedPause;
+  } catch {}
   const selectedMode = () => find('input[name="speaking-mode"]:checked').value;
   let current;
   let closing;
   let disposed = false;
 
-  async function api(method, accessToken, { mode, sessionId } = {}) {
+  async function api(method, accessToken, { mode, pauseMs, sessionId } = {}) {
     const url = new URL(endpoint);
     if (sessionId) url.searchParams.set('sessionId', sessionId);
     if (mode) url.searchParams.set('mode', mode);
+    if (pauseMs != null) url.searchParams.set('pauseMs', String(pauseMs));
     const response = await fetch(url, {
       method, headers: { Authorization: `Bearer ${accessToken}`, apikey: publishableKey },
       cache: 'no-store', keepalive: method === 'DELETE', signal: AbortSignal.timeout(24_000),
@@ -90,6 +108,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     modePicker.disabled = Boolean(closing);
     modeCurrent.hidden = !current;
     modeCurrent.textContent = current?.mode === 'auto' ? 'Смена реплик · Авто' : 'Смена реплик · Вручную';
+    if (current?.pauseMs != null) modeCurrent.textContent += ` · ${pauseOptions.get(String(current.pauseMs))}`;
     done.hidden = current?.mode !== 'manual' || current?.phase !== 'listening';
     mic.hidden = !current?.unlocked || !['speaking', 'listening', 'thinking'].includes(current.phase);
     done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
@@ -99,7 +118,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     else if (current?.workerReady && (!current.unlocked || current.audioBlocked)) {
       status.textContent = 'Нажми «Включить звук», чтобы услышать тьютора.';
     } else if (current?.phase === 'listening' && current.mode === 'auto') {
-      status.textContent = 'Твой ход. Тьютор ответит, когда ты закончишь.';
+      status.textContent = current.pauseMs === null ? 'Твой ход. Тьютор ответит, когда ты закончишь.'
+        : 'Твой ход. Пауза передаст слово тьютору.';
     } else status.textContent = phases[current?.phase] || '';
   }
 
@@ -167,7 +187,9 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       return;
     }
     const room = new Room({ adaptiveStream: true, disconnectOnPageLeave: true });
-    const call = { room, mode: selectedMode(), phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
+    const mode = selectedMode();
+    const pauseMs = mode === 'auto' && pauseSelect.value ? Number(pauseSelect.value) : null;
+    const call = { room, mode, pauseMs, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
     current = call;
     render();
     try {
@@ -185,10 +207,14 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       call.accessToken = await getAccessToken();
       if (current !== call) return;
       if (!call.accessToken) { await stop(errors.AUTH_REQUIRED); return; }
-      call.connection = await api('POST', call.accessToken, { mode: call.mode });
+      call.connection = await api('POST', call.accessToken, { mode, pauseMs });
       if (current !== call) { await release(call); return; }
       if ((call.connection.mode ?? 'manual') !== call.mode) {
         await stop('Автоматический режим пока недоступен. Выбери «Вручную» и попробуй снова.');
+        return;
+      }
+      if ((call.connection.pauseMs ?? null) !== pauseMs) {
+        await stop('Настройка паузы пока недоступна. Выбери «По смыслу фразы» и попробуй снова.');
         return;
       }
       const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt } = call.connection;
@@ -264,6 +290,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
             await stop('Автоматический режим пока недоступен. Выбери «Вручную» и попробуй снова.');
             return;
           }
+          if ((state.pauseMs ?? null) !== pauseMs) {
+            await stop('Настройка паузы пока недоступна. Выбери «По смыслу фразы» и попробуй снова.');
+            return;
+          }
           setPhase(call, state);
           break;
         } catch {
@@ -309,10 +339,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   }
 
   start.addEventListener('click', () => void begin());
-  modePicker.addEventListener('change', () => {
-    modeHint.textContent = selectedMode() === 'auto'
-      ? 'Тьютор отвечает, когда считает реплику завершённой.'
-      : 'Нажми «Готово», чтобы передать ход тьютору.';
+  modePicker.addEventListener('change', event => {
+    if (event.target === pauseSelect) {
+      try { localStorage.setItem(pauseKey, pauseSelect.value); } catch {}
+      return;
+    }
+    pauseSettings.hidden = selectedMode() !== 'auto';
+    modeHint.hidden = !pauseSettings.hidden;
   });
   unlock.addEventListener('click', () => { if (current) void ready(current); });
   end.addEventListener('click', () => void stop());

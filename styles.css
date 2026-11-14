@@ -333,8 +333,8 @@ a.btn { text-decoration: none; }
 .speaking-entry h2 { font-size:1.125rem; }
 .speaking-entry p { margin-top:.35rem; color:var(--muted); font-size:.95rem; }
 .speaking-panel { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; max-width:850px; padding:clamp(16px,3vw,28px); margin-bottom:20px; }
-.speaking-panel:has(.speaking-media:not([hidden])) { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
-.speaking-media { align-self:start; border-radius:14px; overflow:hidden; background:var(--line); }
+.speaking-panel:has(.speaking-media:not([hidden])) { max-width:1180px; grid-template-columns:minmax(0,2fr) minmax(235px,1fr); }
+.speaking-media { align-self:start; justify-self:center; width:min(100%,76dvh,768px); border-radius:14px; overflow:hidden; background:var(--line); }
 .speaking-media video { display:block; width:100%; aspect-ratio:1; object-fit:contain; }
 .speaking-copy { min-width:0; }
 .speaking-copy p { margin:0 0 .75rem; font-size:1rem; line-height:1.5; overflow-wrap:anywhere; }
@@ -347,11 +347,16 @@ a.btn { text-decoration: none; }
 .speaking-panel [hidden] { display:none !important; }
 .speaking-mode { margin:0 0 1rem; padding:.5rem .75rem .25rem; border:1px solid var(--line); border-radius:12px; }
 .speaking-mode legend { font-weight:650; padding:0 .25rem; }
-.speaking-mode label { display:inline-flex; align-items:center; gap:.4rem; min-height:44px; margin-right:1rem; cursor:pointer; }
+.speaking-mode > label { display:inline-flex; align-items:center; gap:.4rem; min-height:44px; margin-right:1rem; cursor:pointer; }
 .speaking-mode input { accent-color:var(--accent); }
+.speaking-pause { display:grid; gap:.5rem; margin-bottom:.5rem; }
+.speaking-pause label { font-weight:650; }
+.speaking-pause select { justify-self:start; max-width:100%; min-height:44px; padding:.4rem .6rem; border:1px solid var(--line); border-radius:8px; background:var(--light); color:var(--text); font:inherit; }
+.speaking-pause p { margin:0; color:var(--muted); }
 .speaking-copy #speaking-mode-hint,.speaking-mode-current { color:var(--muted); }
 @media (max-width:767px) {
   .sidebar .speaking-nav { display:none; }
-  .speaking-panel:has(.speaking-media:not([hidden])) { grid-template-columns:minmax(0,1fr); }
-  .speaking-media video { max-height:36dvh; }
+  .speaking-panel:has(.speaking-media:not([hidden])) { grid-template-columns:minmax(0,1fr); padding:0 0 16px; }
+  .speaking-panel:has(.speaking-media:not([hidden])) .speaking-copy { padding-inline:16px; }
+  .speaking-media { width:min(100%,64dvh); }
 }
