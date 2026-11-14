@@ -39,9 +39,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         <audio autoplay></audio>
       </div>
       <div class="speaking-copy">
-        <p class="speaking-intro">Поговори по-английски с AI-тьютором. Тестовый звонок длится до пяти минут.</p>
+        <p class="speaking-intro">Поговори по-английски с AI-тьютором. После подключения тьютора у тебя до 30 минут.</p>
         <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Simli озвучивает аватар. Lexicon не сохраняет запись или расшифровку.</p>
         <p class="speaking-status" role="status" aria-live="polite"></p>
+        <p class="speaking-countdown" role="timer" hidden></p>
         <p class="speaking-caption" lang="en" aria-live="polite" hidden></p>
         <fieldset class="speaking-mode" aria-describedby="speaking-mode-hint">
           <legend>Смена реплик</legend>
@@ -81,6 +82,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const video = find('video');
   const audio = find('audio');
   const status = find('.speaking-status');
+  const countdown = find('.speaking-countdown');
   const caption = find('.speaking-caption');
   const start = find('.speaking-start');
   const unlock = find('.speaking-unlock');
@@ -166,11 +168,36 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       return;
     }
     if (!Object.hasOwn(phases, state.phase)) return;
+    if (call.connection.connectBy && state.endsAt && state.endsAt !== call.endsAt) {
+      const remaining = Date.parse(state.endsAt) - Date.parse(state.serverNow);
+      if (Number.isFinite(remaining)) {
+        call.endsAt = state.endsAt;
+        clearTimeout(call.timer);
+        clearTimeout(call.startupTimer);
+        startCountdown(call, remaining);
+      }
+    }
     call.phase = state.phase;
     call.turn = state.turn;
     if (state.phase !== 'starting') clearTimeout(call.startupTimer);
     updateMicrophone(call);
     render();
+  }
+
+  function startCountdown(call, remaining) {
+    const expires = performance.now() + remaining;
+    function tick() {
+      if (current !== call) return;
+      const seconds = Math.max(0, Math.ceil((expires - performance.now()) / 1000));
+      if (!seconds) {
+        void stop('Время тестового звонка закончилось.');
+        return;
+      }
+      countdown.hidden = false;
+      countdown.textContent = `Осталось ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+      call.timer = setTimeout(tick, 250);
+    }
+    call.timer = setTimeout(tick, 0);
   }
 
   function updateMicrophone(call) {
@@ -206,6 +233,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     video.srcObject = null;
     audio.srcObject = null;
     media.hidden = true;
+    countdown.hidden = true;
+    countdown.textContent = '';
     caption.hidden = true;
     caption.textContent = '';
     closing = Promise.allSettled([call.room.disconnect(), release(call)]);
@@ -257,8 +286,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         await stop('Сервер не применил настройки тьютора. Обнови страницу и попробуй снова.');
         return;
       }
-      const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt } = call.connection;
-      call.timer = setTimeout(() => void stop('Время тестового звонка закончилось.'), Math.max(0, Date.parse(endsAt) - Date.now()));
+      const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt, connectBy, serverNow } = call.connection;
+      if (connectBy) {
+        call.timer = setTimeout(() => void stop('Тьютор не успел подключиться. Попробуй начать звонок снова.'),
+          Math.max(0, Date.parse(connectBy) - Date.parse(serverNow)));
+      } else {
+        call.timer = setTimeout(() => void stop('Время тестового звонка закончилось.'), Math.max(0, Date.parse(endsAt) - Date.now()));
+      }
 
       const subscribe = (publication, participant) => {
         if (participant.identity === avatarIdentity) publication.setSubscribed(true);
@@ -302,7 +336,6 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       room.on(RoomEvent.Reconnecting, () => {
         if (current !== call) return;
         call.phase = 'reconnecting';
-        call.paused = true;
         updateMicrophone(call);
         render();
       });
@@ -368,7 +401,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       if (!call.unlocked) {
         const state = await rpc(call, 'lexicon.ready');
         if (current !== call) return;
-        call.startupTimer = setTimeout(() => void stop('Тьютор не успел ответить. Попробуй начать звонок снова.'), 32_000);
+        if (!call.endsAt) call.startupTimer = setTimeout(() => void stop('Тьютор не успел ответить. Попробуй начать звонок снова.'), 32_000);
         setPhase(call, state);
       }
       call.unlocked = true;

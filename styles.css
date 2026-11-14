@@ -341,6 +341,7 @@ a.btn { text-decoration: none; }
 .speaking-privacy { color:var(--muted); }
 .speaking-status { font-weight:650; }
 .speaking-status:empty { display:none; }
+.speaking-countdown { color:var(--muted); font-variant-numeric:tabular-nums; }
 .speaking-caption { padding:12px; border:1px solid var(--line); border-radius:10px; }
 .speaking-controls { display:flex; flex-wrap:wrap; gap:10px; }
 .speaking-controls .btn,.speaking-entry .btn { min-height:44px; }
