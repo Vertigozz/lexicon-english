@@ -26,7 +26,7 @@ const tutorFields = {
   voiceModel: { label: 'Модель', defaultValue: 'mini', choices: [['mini', 'GPT Realtime 2.1 Mini'], ['live', 'GPT‑Live‑1']] },
   opening: { label: 'Кто начинает разговор', defaultValue: 'tutor', choices: [['tutor', 'Тьютор'], ['learner', 'Я']] },
   replyLength: { label: 'Длина ответов', defaultValue: 'brief', choices: [['brief', 'Короткие · около 15 слов'], ['standard', 'Обычные · около 30 слов']] },
-  feedback: { label: 'Исправление ошибок', defaultValue: 'on_request', choices: [['on_request', 'По просьбе'], ['off', 'Выключено']] },
+  feedback: { label: 'Исправление ошибок', defaultValue: 'on_request', choices: [['correct_errors', 'Исправлять ошибки'], ['on_request', 'По просьбе'], ['off', 'Выключено']] },
   voiceSpeed: { label: 'Скорость речи', defaultValue: '1', choices: [['0.75', 'Медленно · 0,75×'], ['0.9', 'Чуть медленнее · 0,9×'], ['1', 'Обычная · 1×'], ['1.15', 'Быстрее · 1,15×']] },
 };
 const pauseOptions = new Map([['', 'По смыслу фразы'], ['1000', '1 секунда'], ['1500', '1,5 секунды'],
