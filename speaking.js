@@ -15,11 +15,19 @@ const errors = {
   USER_QUOTA: 'Достигнут лимит запусков. Попробуй позже.',
   INVALID_MODE: 'Обнови страницу и выбери режим звонка снова.',
   INVALID_PAUSE: 'Обнови страницу и выбери длительность паузы снова.',
+  INVALID_PREFERENCES: 'Обнови страницу и выбери настройки тьютора снова.',
   START_FAILED: 'Не удалось запустить комнату. Попробуй позже.',
   SERVICE_UNAVAILABLE: 'Сервис звонков временно недоступен.',
 };
 const decoder = new TextDecoder();
 const pauseKey = 'lexicon-speaking-pause-ms';
+const tutorSettingsKey = 'lexicon-speaking-tutor-settings';
+const tutorFields = {
+  opening: { label: 'Кто начинает разговор', defaultValue: 'tutor', choices: [['tutor', 'Тьютор'], ['learner', 'Я']] },
+  replyLength: { label: 'Длина ответов', defaultValue: 'brief', choices: [['brief', 'Короткие · около 15 слов'], ['standard', 'Обычные · около 30 слов']] },
+  feedback: { label: 'Исправление ошибок', defaultValue: 'on_request', choices: [['on_request', 'По просьбе'], ['off', 'Выключено']] },
+  voiceSpeed: { label: 'Скорость речи', defaultValue: '1', choices: [['0.75', 'Медленно · 0,75×'], ['0.9', 'Чуть медленнее · 0,9×'], ['1', 'Обычная · 1×'], ['1.15', 'Быстрее · 1,15×']] },
+};
 const pauseOptions = new Map([['', 'По смыслу фразы'], ['1000', '1 секунда'], ['1500', '1,5 секунды'],
   ['2000', '2 секунды'], ['2500', '2,5 секунды'], ['3000', '3 секунды'], ['4000', '4 секунды']]);
 
@@ -48,6 +56,16 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
             <p id="speaking-pause-hint">Если выбрать время, тьютор начнёт готовить ответ после указанной паузы в речи.</p>
           </div>
         </fieldset>
+        <fieldset class="speaking-tutor-settings">
+          <legend>Настройки тьютора</legend>
+          ${Object.entries(tutorFields).map(([key, field]) => `
+            <div class="speaking-option">
+              <label for="speaking-${key}">${field.label}</label>
+              <select id="speaking-${key}" name="${key}">
+                ${field.choices.map(([value, label]) => `<option value="${value}"${value === field.defaultValue ? ' selected' : ''}>${label}</option>`).join('')}
+              </select>
+            </div>`).join('')}
+        </fieldset>
         <p class="speaking-mode-current" hidden></p>
         <div class="speaking-controls">
           <button class="btn primary speaking-start">Начать звонок</button>
@@ -74,20 +92,31 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const modeCurrent = find('.speaking-mode-current');
   const pauseSettings = find('.speaking-pause');
   const pauseSelect = find('#speaking-pause');
+  const tutorSettings = find('.speaking-tutor-settings');
+  const tutorSelects = [...tutorSettings.querySelectorAll('select')];
+  const getPreferences = () => Object.fromEntries(tutorSelects.map(select => [select.name, select.value]));
   try {
     const savedPause = localStorage.getItem(pauseKey);
     if (pauseOptions.has(savedPause)) pauseSelect.value = savedPause;
+  } catch {}
+  try {
+    const saved = JSON.parse(localStorage.getItem(tutorSettingsKey));
+    for (const select of tutorSelects) {
+      const value = saved?.[select.name];
+      if (tutorFields[select.name].choices.some(([choice]) => choice === value)) select.value = value;
+    }
   } catch {}
   const selectedMode = () => find('input[name="speaking-mode"]:checked').value;
   let current;
   let closing;
   let disposed = false;
 
-  async function api(method, accessToken, { mode, pauseMs, sessionId } = {}) {
+  async function api(method, accessToken, { mode, pauseMs, preferences, sessionId } = {}) {
     const url = new URL(endpoint);
     if (sessionId) url.searchParams.set('sessionId', sessionId);
     if (mode) url.searchParams.set('mode', mode);
     if (pauseMs != null) url.searchParams.set('pauseMs', String(pauseMs));
+    for (const [key, value] of Object.entries(preferences ?? {})) url.searchParams.set(key, value);
     const response = await fetch(url, {
       method, headers: { Authorization: `Bearer ${accessToken}`, apikey: publishableKey },
       cache: 'no-store', keepalive: method === 'DELETE', signal: AbortSignal.timeout(24_000),
@@ -106,6 +135,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     unlock.hidden = !current?.workerReady || current.unlocked && !current.audioBlocked;
     modePicker.hidden = Boolean(current);
     modePicker.disabled = Boolean(closing);
+    tutorSettings.hidden = Boolean(current);
+    tutorSettings.disabled = Boolean(closing);
     modeCurrent.hidden = !current;
     modeCurrent.textContent = current?.mode === 'auto' ? 'Смена реплик · Авто' : 'Смена реплик · Вручную';
     if (current?.pauseMs != null) modeCurrent.textContent += ` · ${pauseOptions.get(String(current.pauseMs))}`;
@@ -145,6 +176,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   function updateMicrophone(call) {
     if (!call.track || current !== call) return;
     call.track.mediaStreamTrack.enabled = call.phase === 'listening' && call.unlocked && !call.paused && !call.audioBlocked;
+  }
+
+  function matchesPreferences(call, settings) {
+    return Object.entries(call.preferences).every(([key, value]) => (settings[key] ?? tutorFields[key].defaultValue) === value);
   }
 
   function rpc(call, method, payload = '') {
@@ -189,7 +224,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     const room = new Room({ adaptiveStream: true, disconnectOnPageLeave: true });
     const mode = selectedMode();
     const pauseMs = mode === 'auto' && pauseSelect.value ? Number(pauseSelect.value) : null;
-    const call = { room, mode, pauseMs, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
+    const preferences = getPreferences();
+    const call = { room, mode, pauseMs, preferences, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
     current = call;
     render();
     try {
@@ -207,7 +243,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       call.accessToken = await getAccessToken();
       if (current !== call) return;
       if (!call.accessToken) { await stop(errors.AUTH_REQUIRED); return; }
-      call.connection = await api('POST', call.accessToken, { mode, pauseMs });
+      call.connection = await api('POST', call.accessToken, { mode, pauseMs, preferences });
       if (current !== call) { await release(call); return; }
       if ((call.connection.mode ?? 'manual') !== call.mode) {
         await stop('Автоматический режим пока недоступен. Выбери «Вручную» и попробуй снова.');
@@ -215,6 +251,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       }
       if ((call.connection.pauseMs ?? null) !== pauseMs) {
         await stop('Настройка паузы пока недоступна. Выбери «По смыслу фразы» и попробуй снова.');
+        return;
+      }
+      if (!matchesPreferences(call, call.connection)) {
+        await stop('Сервер не применил настройки тьютора. Обнови страницу и попробуй снова.');
         return;
       }
       const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt } = call.connection;
@@ -294,6 +334,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
             await stop('Настройка паузы пока недоступна. Выбери «По смыслу фразы» и попробуй снова.');
             return;
           }
+          if (!matchesPreferences(call, state)) {
+            await stop('Тьютор не применил настройки. Попробуй начать звонок снова.');
+            return;
+          }
           setPhase(call, state);
           break;
         } catch {
@@ -339,6 +383,9 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   }
 
   start.addEventListener('click', () => void begin());
+  tutorSettings.addEventListener('change', () => {
+    try { localStorage.setItem(tutorSettingsKey, JSON.stringify(getPreferences())); } catch {}
+  });
   modePicker.addEventListener('change', event => {
     if (event.target === pauseSelect) {
       try { localStorage.setItem(pauseKey, pauseSelect.value); } catch {}
