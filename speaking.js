@@ -37,9 +37,9 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     <section class="neo speaking-panel" aria-label="Голосовой урок">
       <div class="speaking-media" hidden>
         <video aria-label="Видео аватара Obvious Thrush" playsinline muted autoplay></video>
-        <audio autoplay></audio>
       </div>
       <div class="speaking-copy">
+        <audio autoplay></audio>
         <p class="speaking-intro">Поговори по-английски с AI-тьютором. После подключения тьютора у тебя до 30 минут.</p>
         <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Simli озвучивает аватар. Lexicon не сохраняет запись или расшифровку.</p>
         <p class="speaking-status" role="status" aria-live="polite"></p>
@@ -75,6 +75,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
           <button class="btn primary speaking-unlock" hidden>Включить звук</button>
           <button class="btn primary speaking-done" hidden>Готово</button>
           <button class="btn subtle speaking-mic" hidden>Выключить микрофон</button>
+          <button class="btn subtle speaking-toggle-video" hidden>Выключить видео</button>
           <button class="btn subtle speaking-end" hidden>Завершить</button>
         </div>
       </div>
@@ -90,6 +91,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const unlock = find('.speaking-unlock');
   const done = find('.speaking-done');
   const mic = find('.speaking-mic');
+  const toggleVideo = find('.speaking-toggle-video');
   const end = find('.speaking-end');
   const modePicker = find('.speaking-mode');
   const modeHint = find('#speaking-mode-hint');
@@ -157,6 +159,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
     mic.disabled = current?.phase !== 'listening';
     mic.textContent = current?.paused ? 'Включить микрофон' : 'Выключить микрофон';
+    toggleVideo.hidden = !current?.videoPublication;
+    toggleVideo.textContent = current?.videoOff ? 'Включить видео' : 'Выключить видео';
     if (message !== undefined) status.textContent = message;
     else if (current?.workerReady && (!current.unlocked || current.audioBlocked)) {
       status.textContent = 'Нажми «Включить звук», чтобы услышать тьютора.';
@@ -237,6 +241,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     current = undefined;
     clearTimeout(call.timer);
     clearTimeout(call.startupTimer);
+    clearInterval(call.mediaSampler);
+    if (call.videoFrame !== undefined) video.cancelVideoFrameCallback(call.videoFrame);
     call.track?.stop();
     call.videoTrack?.detach(video);
     call.audioTrack?.detach(audio);
@@ -254,6 +260,46 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     render(message);
   }
 
+  async function sampleMedia(call) {
+    if (current !== call || call.sampling || document.hidden) return;
+    call.sampling = true;
+    try {
+      const report = { ...call.firstMedia };
+      for (const [kind, track] of [['video', call.videoTrack], ['audio', call.audioTrack]]) {
+        const stats = await track?.getRTCStatsReport?.();
+        stats?.forEach(row => {
+          if (row.type !== 'inbound-rtp' || (row.kind ?? row.mediaType) !== kind) return;
+          const before = call.lastMediaStats.get(kind);
+          call.lastMediaStats.set(kind, row);
+          if (!before || row.id !== before.id || row.ssrc !== before.ssrc) return;
+          const lost = (row.packetsLost ?? 0) - (before.packetsLost ?? 0);
+          if (lost > 0) report[`${kind}_lost`] = lost;
+          if (kind === 'video') {
+            const freezes = (row.freezeCount ?? 0) - (before.freezeCount ?? 0);
+            const freezeMs = Math.round(((row.totalFreezesDuration ?? 0) - (before.totalFreezesDuration ?? 0)) * 1000);
+            if (freezes > 0) report.video_freezes = freezes;
+            if (freezeMs > 0) report.video_freeze_ms = freezeMs;
+          } else {
+            const concealed = (row.concealedSamples ?? 0) - (before.concealedSamples ?? 0);
+            const samples = (row.jitterBufferEmittedCount ?? 0) - (before.jitterBufferEmittedCount ?? 0);
+            const bufferMs = Math.round(((row.jitterBufferDelay ?? 0) - (before.jitterBufferDelay ?? 0)) * 1000 / samples);
+            const jitterMs = Math.round((row.jitter ?? 0) * 1000);
+            if (concealed > 0) report.audio_concealed = concealed;
+            if (samples > 0 && bufferMs >= 150) report.audio_jitter_buffer_ms = bufferMs;
+            if (jitterMs >= 40) report.audio_jitter_ms = jitterMs;
+          }
+        });
+      }
+      if (current === call && Object.keys(report).length) {
+        await call.room.localParticipant.performRpc({ destinationIdentity: call.connection.workerIdentity,
+          method: 'lexicon.media', payload: JSON.stringify(report), responseTimeout: 2000 });
+        for (const key of Object.keys(report)) delete call.firstMedia[key];
+      }
+    } catch {} finally {
+      call.sampling = false;
+    }
+  }
+
   async function begin() {
     if (current || closing || disposed) return;
     if (!navigator.onLine || !navigator.mediaDevices?.getUserMedia) {
@@ -264,12 +310,14 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     const mode = isLive() ? 'auto' : selectedMode();
     const pauseMs = !isLive() && mode === 'auto' && pauseSelect.value ? Number(pauseSelect.value) : null;
     const preferences = getPreferences();
-    const call = { room, mode, pauseMs, preferences, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
+    const call = { room, mode, pauseMs, preferences, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false,
+      startedAt: performance.now(), firstMedia: {}, lastMediaStats: new Map() };
     current = call;
     render();
     try {
       // Unlock playback and request permission from the explicit Start gesture.
       const audioUnlocked = room.startAudio().then(() => true, () => false);
+      const auth = getAccessToken().catch(() => null);
       const track = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
       if (current !== call) { track.stop(); return; }
       call.track = track;
@@ -277,9 +325,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         if (current === call) void stop('Доступ к микрофону потерян. Проверь настройки и начни звонок снова.');
       });
       updateMicrophone(call);
-      call.audioUnlocked = await audioUnlocked;
-      if (current !== call) return;
-      call.accessToken = await getAccessToken();
+      call.accessToken = await auth;
       if (current !== call) return;
       if (!call.accessToken) { await stop(errors.AUTH_REQUIRED); return; }
       call.connection = await api('POST', call.accessToken, { mode, pauseMs, preferences });
@@ -305,27 +351,61 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       }
 
       const subscribe = (publication, participant) => {
-        if (participant.identity === avatarIdentity) publication.setSubscribed(true);
+        if (participant.identity === avatarIdentity) {
+          if (publication.kind === Track.Kind.Video) {
+            call.videoPublication = publication;
+            publication.setSubscribed(!call.videoOff);
+            render();
+          } else publication.setSubscribed(true);
+        }
       };
       room.on(RoomEvent.TrackPublished, subscribe);
       room.on(RoomEvent.TrackSubscribed, (remote, publication, participant) => {
         if (current !== call || participant.identity !== avatarIdentity) return;
         if (remote.kind === Track.Kind.Video) {
+          if (call.videoOff || publication !== call.videoPublication) return;
           call.videoTrack?.detach(video);
           call.videoTrack = remote;
           remote.attach(video);
           video.muted = true;
           media.hidden = false;
+          if (!call.firstVideoSeen && video.requestVideoFrameCallback) {
+            if (call.videoFrame !== undefined) video.cancelVideoFrameCallback(call.videoFrame);
+            call.videoFrame = video.requestVideoFrameCallback(() => {
+              call.videoFrame = undefined;
+              if (current !== call) return;
+              call.firstVideoSeen = true;
+              call.firstMedia.first_video_ms = Math.round(performance.now() - call.startedAt);
+            });
+          }
         } else if (remote.kind === Track.Kind.Audio) {
           call.audioTrack?.detach(audio);
           call.audioTrack = remote;
           remote.attach(audio);
         }
       });
+      room.on(RoomEvent.TrackUnpublished, (publication, participant) => {
+        if (current !== call || participant.identity !== avatarIdentity || publication !== call.videoPublication) return;
+        call.videoPublication = undefined;
+        render();
+      });
       room.on(RoomEvent.TrackUnsubscribed, remote => {
         if (current !== call) return;
-        if (remote === call.videoTrack) { remote.detach(video); media.hidden = true; }
-        if (remote === call.audioTrack) remote.detach(audio);
+        if (remote === call.videoTrack) {
+          remote.detach(video);
+          media.hidden = true;
+          call.videoTrack = undefined;
+          call.lastMediaStats.delete('video');
+          if (call.videoFrame !== undefined) {
+            video.cancelVideoFrameCallback(call.videoFrame);
+            call.videoFrame = undefined;
+          }
+        }
+        if (remote === call.audioTrack) {
+          remote.detach(audio);
+          call.audioTrack = undefined;
+          call.lastMediaStats.delete('audio');
+        }
       });
       room.on(RoomEvent.AudioPlaybackStatusChanged, () => {
         if (current !== call) return;
@@ -358,13 +438,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         if (current === call) void stop('Соединение завершено. Можно начать новый звонок.');
       });
       room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
-      await room.connect(serverUrl, participantToken, { autoSubscribe: false, maxRetries: 0, websocketTimeout: 10_000 });
+      await room.connect(serverUrl, participantToken, { autoSubscribe: false, maxRetries: 1, websocketTimeout: 8_000 });
       if (current !== call) { await room.disconnect(); return; }
       room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
       for (const participant of room.remoteParticipants.values()) {
         for (const publication of participant.trackPublications.values()) subscribe(publication, participant);
       }
-      await room.localParticipant.publishTrack(track, { source: Track.Source.Microphone });
+      const published = room.localParticipant.publishTrack(track, { source: Track.Source.Microphone }).then(() => true, () => false);
       const waitUntil = Date.now() + 12_000;
       while (current === call && Date.now() < waitUntil) {
         try {
@@ -389,7 +469,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       }
       if (current !== call) return;
       if (call.seq === -1) { await stop('Тьютор не подключился. Попробуй начать звонок снова.'); return; }
+      const micReady = await published;
+      if (current !== call) return;
+      if (!micReady) { await stop('Микрофон не подключился. Попробуй начать звонок снова.'); return; }
+      call.audioUnlocked = await audioUnlocked;
+      if (current !== call) return;
       call.workerReady = true;
+      call.mediaSampler = setInterval(() => void sampleMedia(call), 10_000);
       if (call.audioUnlocked && room.canPlaybackAudio) await ready(call);
       else render();
     } catch (error) {
@@ -426,6 +512,11 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   }
 
   start.addEventListener('click', () => void begin());
+  audio.addEventListener('playing', () => {
+    if (!current || current.firstAudioSeen) return;
+    current.firstAudioSeen = true;
+    current.firstMedia.first_audio_ms = Math.round(performance.now() - current.startedAt);
+  });
   tutorSettings.addEventListener('change', () => {
     const saved = Object.fromEntries(tutorSelects.filter(select => select !== modelSelect)
       .map(select => [select.name, select.value]));
@@ -442,6 +533,14 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   });
   unlock.addEventListener('click', () => { if (current) void ready(current); });
   end.addEventListener('click', () => void stop());
+  toggleVideo.addEventListener('click', () => {
+    const call = current;
+    if (!call?.videoPublication) return;
+    call.videoOff = !call.videoOff;
+    call.videoPublication.setSubscribed(!call.videoOff);
+    media.hidden = call.videoOff || !call.videoTrack;
+    render();
+  });
   mic.addEventListener('click', () => {
     if (current?.phase !== 'listening') return;
     current.paused = !current.paused;
