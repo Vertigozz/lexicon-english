@@ -13,6 +13,7 @@ const errors = {
   PILOT_DISABLED: 'Голосовой тест пока не включён.',
   PILOT_BUSY: 'Другой тестовый звонок ещё открыт. Попробуй чуть позже.',
   USER_QUOTA: 'Достигнут лимит запусков. Попробуй позже.',
+  INVALID_MODE: 'Обнови страницу и выбери режим звонка снова.',
   START_FAILED: 'Не удалось запустить комнату. Попробуй позже.',
   SERVICE_UNAVAILABLE: 'Сервис звонков временно недоступен.',
 };
@@ -30,6 +31,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Simli озвучивает аватар. Lexicon не сохраняет запись или расшифровку.</p>
         <p class="speaking-status" role="status" aria-live="polite"></p>
         <p class="speaking-caption" lang="en" aria-live="polite" hidden></p>
+        <fieldset class="speaking-mode" aria-describedby="speaking-mode-hint">
+          <legend>Смена реплик</legend>
+          <label><input type="radio" name="speaking-mode" value="auto"> Авто</label>
+          <label><input type="radio" name="speaking-mode" value="manual" checked> Вручную</label>
+          <p id="speaking-mode-hint">Нажми «Готово», чтобы передать ход тьютору.</p>
+        </fieldset>
+        <p class="speaking-mode-current" hidden></p>
         <div class="speaking-controls">
           <button class="btn primary speaking-start">Начать звонок</button>
           <button class="btn primary speaking-unlock" hidden>Включить звук</button>
@@ -50,13 +58,18 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const done = find('.speaking-done');
   const mic = find('.speaking-mic');
   const end = find('.speaking-end');
+  const modePicker = find('.speaking-mode');
+  const modeHint = find('#speaking-mode-hint');
+  const modeCurrent = find('.speaking-mode-current');
+  const selectedMode = () => find('input[name="speaking-mode"]:checked').value;
   let current;
   let closing;
   let disposed = false;
 
-  async function api(method, accessToken, sessionId) {
+  async function api(method, accessToken, { mode, sessionId } = {}) {
     const url = new URL(endpoint);
     if (sessionId) url.searchParams.set('sessionId', sessionId);
+    if (mode) url.searchParams.set('mode', mode);
     const response = await fetch(url, {
       method, headers: { Authorization: `Bearer ${accessToken}`, apikey: publishableKey },
       cache: 'no-store', keepalive: method === 'DELETE', signal: AbortSignal.timeout(24_000),
@@ -73,7 +86,11 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     start.disabled = Boolean(closing);
     end.hidden = !current;
     unlock.hidden = !current?.workerReady || current.unlocked && !current.audioBlocked;
-    done.hidden = current?.phase !== 'listening';
+    modePicker.hidden = Boolean(current);
+    modePicker.disabled = Boolean(closing);
+    modeCurrent.hidden = !current;
+    modeCurrent.textContent = current?.mode === 'auto' ? 'Смена реплик · Авто' : 'Смена реплик · Вручную';
+    done.hidden = current?.mode !== 'manual' || current?.phase !== 'listening';
     mic.hidden = !current?.unlocked || !['speaking', 'listening', 'thinking'].includes(current.phase);
     done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
     mic.disabled = current?.phase !== 'listening';
@@ -81,6 +98,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     if (message !== undefined) status.textContent = message;
     else if (current?.workerReady && (!current.unlocked || current.audioBlocked)) {
       status.textContent = 'Нажми «Включить звук», чтобы услышать тьютора.';
+    } else if (current?.phase === 'listening' && current.mode === 'auto') {
+      status.textContent = 'Твой ход. Тьютор ответит, когда ты закончишь.';
     } else status.textContent = phases[current?.phase] || '';
   }
 
@@ -117,7 +136,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   async function release(call) {
     if (call.released || !call.connection) return;
     call.released = true;
-    await api('DELETE', call.accessToken, call.connection.sessionId).catch(() => {});
+    await api('DELETE', call.accessToken, { sessionId: call.connection.sessionId }).catch(() => {});
   }
 
   async function stop(message = 'Звонок завершён.') {
@@ -148,7 +167,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       return;
     }
     const room = new Room({ adaptiveStream: true, disconnectOnPageLeave: true });
-    const call = { room, phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
+    const call = { room, mode: selectedMode(), phase: 'starting', seq: -1, turn: 0, paused: false, sending: false };
     current = call;
     render();
     try {
@@ -166,8 +185,12 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       call.accessToken = await getAccessToken();
       if (current !== call) return;
       if (!call.accessToken) { await stop(errors.AUTH_REQUIRED); return; }
-      call.connection = await api('POST', call.accessToken);
+      call.connection = await api('POST', call.accessToken, { mode: call.mode });
       if (current !== call) { await release(call); return; }
+      if ((call.connection.mode ?? 'manual') !== call.mode) {
+        await stop('Автоматический режим пока недоступен. Выбери «Вручную» и попробуй снова.');
+        return;
+      }
       const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt } = call.connection;
       call.timer = setTimeout(() => void stop('Время тестового звонка закончилось.'), Math.max(0, Date.parse(endsAt) - Date.now()));
 
@@ -236,7 +259,12 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       const waitUntil = Date.now() + 12_000;
       while (current === call && Date.now() < waitUntil) {
         try {
-          setPhase(call, await rpc(call, 'lexicon.status'));
+          const state = await rpc(call, 'lexicon.status');
+          if ((state.mode ?? 'manual') !== call.mode) {
+            await stop('Автоматический режим пока недоступен. Выбери «Вручную» и попробуй снова.');
+            return;
+          }
+          setPhase(call, state);
           break;
         } catch {
           await new Promise(resolve => setTimeout(resolve, 400));
@@ -281,6 +309,11 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   }
 
   start.addEventListener('click', () => void begin());
+  modePicker.addEventListener('change', () => {
+    modeHint.textContent = selectedMode() === 'auto'
+      ? 'Тьютор отвечает, когда считает реплику завершённой.'
+      : 'Нажми «Готово», чтобы передать ход тьютору.';
+  });
   unlock.addEventListener('click', () => { if (current) void ready(current); });
   end.addEventListener('click', () => void stop());
   mic.addEventListener('click', () => {
@@ -291,7 +324,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   });
   done.addEventListener('click', async () => {
     const call = current;
-    if (!call || call.phase !== 'listening' || call.sending || call.paused || call.audioBlocked) return;
+    if (!call || call.mode !== 'manual' || call.phase !== 'listening' || call.sending || call.paused || call.audioBlocked) return;
     call.sending = true;
     render();
     try {

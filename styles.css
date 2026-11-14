@@ -345,6 +345,11 @@ a.btn { text-decoration: none; }
 .speaking-controls { display:flex; flex-wrap:wrap; gap:10px; }
 .speaking-controls .btn,.speaking-entry .btn { min-height:44px; }
 .speaking-panel [hidden] { display:none !important; }
+.speaking-mode { margin:0 0 1rem; padding:.5rem .75rem .25rem; border:1px solid var(--line); border-radius:12px; }
+.speaking-mode legend { font-weight:650; padding:0 .25rem; }
+.speaking-mode label { display:inline-flex; align-items:center; gap:.4rem; min-height:44px; margin-right:1rem; cursor:pointer; }
+.speaking-mode input { accent-color:var(--accent); }
+.speaking-copy #speaking-mode-hint,.speaking-mode-current { color:var(--muted); }
 @media (max-width:767px) {
   .sidebar .speaking-nav { display:none; }
   .speaking-panel:has(.speaking-media:not([hidden])) { grid-template-columns:minmax(0,1fr); }

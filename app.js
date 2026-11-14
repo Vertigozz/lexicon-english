@@ -473,7 +473,7 @@ function mountSpeakingPage(){
   if(!root)return;
   speakingView=root;
   speakingAccount=accountUser.id;
-  import('./speaking.js?v=1').then(({mountSpeaking})=>{
+  import('./speaking.js?v=2').then(({mountSpeaking})=>{
     if(speakingView!==root||route!=='speaking')return;
     unmountSpeaking=mountSpeaking(root,{
       endpoint:speakingConfig.endpoint||new URL('/functions/v1/tutor',cloudConfig.url).href,
