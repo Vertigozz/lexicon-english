@@ -134,7 +134,15 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     });
     if (response.status === 204) return null;
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(errors[data.code] || errors.SERVICE_UNAVAILABLE);
+    if (!response.ok) {
+      const retryAt = Date.parse(data.retryAt);
+      const message = data.code === 'USER_QUOTA' && Number.isFinite(retryAt)
+        ? `Достигнут лимит запусков. Следующий звонок доступен с ${new Intl.DateTimeFormat('ru-RU', {
+          day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+        }).format(retryAt)}.`
+        : errors[data.code] || errors.SERVICE_UNAVAILABLE;
+      throw new Error(message, { cause: 'tutor-api' });
+    }
     return data;
   }
 
@@ -483,7 +491,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       const denied = error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError';
       await stop(denied ? 'Разреши микрофон в настройках браузера и попробуй снова.' :
         error.name === 'NotFoundError' ? 'Микрофон не найден.' :
-        errors.AUTH_REQUIRED === error.message || Object.values(errors).includes(error.message) ? error.message :
+        error.cause === 'tutor-api' ? error.message :
         'Не удалось подключить звонок. Проверь интернет и попробуй снова.');
     }
   }
