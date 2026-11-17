@@ -313,6 +313,27 @@ a.btn { text-decoration: none; }
 .favorite-entry-header h2 { min-width:0; margin:.35rem 0 0; }
 .favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
 .favorite-entry-actions .favorite-bookmark { color:var(--accent); }
+.entry-action { position:relative; display:flex; }
+.entry-action .btn[aria-disabled="true"] { cursor:wait; opacity:.57; }
+.entry-hint {
+  position:absolute;
+  z-index:2;
+  inset-block-start:100%;
+  inset-inline-end:0;
+  padding:.35rem .65rem;
+  border:1px solid var(--line);
+  border-radius:.65rem;
+  background:var(--bg);
+  color:var(--text);
+  box-shadow:0 4px 12px var(--shadow);
+  font-size:.875rem;
+  white-space:nowrap;
+  visibility:hidden;
+}
+.entry-action > .btn:focus-visible + .entry-hint { visibility:visible; }
+@media (hover:hover) {
+  .entry-action:hover > .entry-hint { visibility:visible; }
+}
 .dictionary-panel .favorites-note { font-size:.875rem; line-height:1.5; margin-bottom:1rem; }
 @media(max-width:767px) {
   .dictionary-panel { padding:1rem; }
