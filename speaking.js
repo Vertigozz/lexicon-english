@@ -26,7 +26,7 @@ const tutorFields = {
   voiceModel: { label: 'Модель', defaultValue: 'mini', choices: [['mini', 'GPT Realtime 2.1 Mini'], ['live', 'GPT‑Live‑1']] },
   mediaMode: { label: 'Формат звонка', defaultValue: 'avatar', choices: [['avatar', 'С аватаром'], ['voice', 'Только голос']] },
   opening: { label: 'Кто начинает разговор', defaultValue: 'tutor', choices: [['tutor', 'Тьютор'], ['learner', 'Я']] },
-  replyLength: { label: 'Длина ответов', defaultValue: 'brief', choices: [['brief', 'Короткие · около 15 слов'], ['standard', 'Обычные · около 30 слов']] },
+  replyLength: { label: 'Длина ответов', defaultValue: 'brief', choices: [['brief', 'Около 15 слов'], ['standard', 'Около 30 слов']] },
   feedback: { label: 'Исправление ошибок', defaultValue: 'on_request', choices: [['correct_errors', 'Исправлять ошибки'], ['on_request', 'По просьбе'], ['off', 'Выключено']] },
   voiceSpeed: { label: 'Скорость речи', defaultValue: '1', choices: [['0.75', 'Медленно · 0,75×'], ['0.9', 'Чуть медленнее · 0,9×'], ['1', 'Обычная · 1×'], ['1.15', 'Быстрее · 1,15×']] },
 };
