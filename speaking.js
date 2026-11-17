@@ -24,6 +24,7 @@ const pauseKey = 'lexicon-speaking-pause-ms';
 const tutorSettingsKey = 'lexicon-speaking-tutor-settings';
 const tutorFields = {
   voiceModel: { label: 'Модель', defaultValue: 'mini', choices: [['mini', 'GPT Realtime 2.1 Mini'], ['live', 'GPT‑Live‑1']] },
+  mediaMode: { label: 'Формат звонка', defaultValue: 'avatar', choices: [['avatar', 'С аватаром'], ['voice', 'Только голос']] },
   opening: { label: 'Кто начинает разговор', defaultValue: 'tutor', choices: [['tutor', 'Тьютор'], ['learner', 'Я']] },
   replyLength: { label: 'Длина ответов', defaultValue: 'brief', choices: [['brief', 'Короткие · около 15 слов'], ['standard', 'Обычные · около 30 слов']] },
   feedback: { label: 'Исправление ошибок', defaultValue: 'on_request', choices: [['correct_errors', 'Исправлять ошибки'], ['on_request', 'По просьбе'], ['off', 'Выключено']] },
@@ -43,7 +44,11 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     <section class="neo speaking-panel" aria-label="Голосовой урок">
       <div class="speaking-call" hidden>
         <div class="speaking-stage">
-          <div class="speaking-video-placeholder">${callIcon(videoIcon)}<span>Подключаем видео…</span></div>
+          <div class="speaking-video-placeholder">
+            <i class="speaking-avatar-symbol">${callIcon(videoIcon)}</i>
+            <i class="speaking-voice-symbol">${callIcon(micIcon)}</i>
+            <span>Подключаем видео…</span>
+          </div>
           <video aria-label="Видео аватара Obvious Thrush" playsinline muted autoplay hidden></video>
         </div>
         <div class="speaking-controls speaking-call-controls" role="group" aria-label="Управление звонком">
@@ -68,7 +73,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       <audio autoplay></audio>
       <div class="speaking-copy">
         <p class="speaking-intro">Поговори по-английски с AI-тьютором. После подключения тьютора у тебя до 30 минут.</p>
-        <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Simli озвучивает аватар. Lexicon не сохраняет запись или расшифровку.</p>
+        <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Для звонка с аватаром используется Simli. Lexicon не сохраняет запись или расшифровку.</p>
         <p class="speaking-status" role="status" aria-live="polite"></p>
         <fieldset class="speaking-mode" aria-describedby="speaking-mode-hint">
           <legend>Смена реплик</legend>
@@ -174,6 +179,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   function render(message) {
     if (disposed) return;
     const inCall = Boolean(current);
+    const voiceOnly = current?.preferences.mediaMode === 'voice';
+    callPanel.classList.toggle('speaking-voice-only', voiceOnly);
     if (callPanel.hidden === inCall) {
       panel.classList.toggle('speaking-panel-active', inCall);
       callPanel.hidden = chat.hidden = !inCall;
@@ -197,12 +204,13 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
     mic.disabled = !current?.unlocked || current.phase !== 'listening';
     toggleVideo.disabled = !current?.videoPublication;
+    toggleVideo.hidden = voiceOnly;
     const micOff = mic.disabled || Boolean(current?.paused || current?.audioBlocked);
     setCallButton(mic, micOff, current?.paused ? 'Включить микрофон'
       : mic.disabled ? 'Микрофон выключен до твоего хода' : 'Выключить микрофон');
     setCallButton(toggleVideo, Boolean(current?.videoOff), current?.videoOff ? 'Включить видео'
       : toggleVideo.disabled ? 'Видео подключается' : 'Выключить видео');
-    videoPlaceholder.textContent = current?.videoOff ? 'Видео выключено' : 'Подключаем видео…';
+    videoPlaceholder.textContent = voiceOnly ? 'Только голос' : current?.videoOff ? 'Видео выключено' : 'Подключаем видео…';
     if (message !== undefined) status.textContent = message;
     else if (current?.workerReady && (!current.unlocked || current.audioBlocked)) {
       status.textContent = 'Нажми «Включить звук», чтобы услышать тьютора.';
@@ -239,7 +247,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     if (current !== call || !Number.isSafeInteger(state.seq) || state.seq < call.seq) return;
     call.seq = state.seq;
     if (state.phase === 'error') {
-      void stop('Аватар не успел подключиться. Попробуй начать звонок снова.');
+      void stop('Тьютор не успел подключиться. Попробуй начать звонок снова.');
       return;
     }
     if (state.phase === 'ended') {
@@ -346,11 +354,16 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
             if (freezes > 0) report.video_freezes = freezes;
             if (freezeMs > 0) report.video_freeze_ms = freezeMs;
           } else {
-            const concealed = (row.concealedSamples ?? 0) - (before.concealedSamples ?? 0);
+            for (const [source, target] of [['packetsReceived', 'audio_received'], ['packetsDiscarded', 'audio_discarded'],
+              ['concealedSamples', 'audio_concealed']]) {
+              if (Number.isFinite(row[source]) && Number.isFinite(before[source])) {
+                report[target] = Math.max(0, row[source] - before[source]);
+              }
+            }
+            report.video_subscribed = Number(Boolean(call.videoTrack));
             const samples = (row.jitterBufferEmittedCount ?? 0) - (before.jitterBufferEmittedCount ?? 0);
             const bufferMs = Math.round(((row.jitterBufferDelay ?? 0) - (before.jitterBufferDelay ?? 0)) * 1000 / samples);
             const jitterMs = Math.round((row.jitter ?? 0) * 1000);
-            if (concealed > 0) report.audio_concealed = concealed;
             if (samples > 0 && bufferMs >= 150) report.audio_jitter_buffer_ms = bufferMs;
             if (jitterMs >= 40) report.audio_jitter_ms = jitterMs;
           }
@@ -409,6 +422,8 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         return;
       }
       const { serverUrl, participantToken, workerIdentity, avatarIdentity, endsAt, connectBy, serverNow } = call.connection;
+      const voiceOnly = preferences.mediaMode === 'voice';
+      const audioIdentity = voiceOnly ? workerIdentity : avatarIdentity;
       if (connectBy) {
         call.timer = setTimeout(() => void stop('Тьютор не успел подключиться. Попробуй начать звонок снова.'),
           Math.max(0, Date.parse(connectBy) - Date.parse(serverNow)));
@@ -417,18 +432,19 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       }
 
       const subscribe = (publication, participant) => {
-        if (participant.identity === avatarIdentity) {
-          if (publication.kind === Track.Kind.Video) {
-            call.videoPublication = publication;
-            publication.setSubscribed(!call.videoOff);
-            render();
-          } else publication.setSubscribed(true);
+        if (current !== call) return;
+        if (publication.kind === Track.Kind.Video && !voiceOnly && participant.identity === avatarIdentity) {
+          call.videoPublication = publication;
+          publication.setSubscribed(!call.videoOff);
+          render();
+        } else if (publication.kind === Track.Kind.Audio && participant.identity === audioIdentity) {
+          publication.setSubscribed(true);
         }
       };
       room.on(RoomEvent.TrackPublished, subscribe);
       room.on(RoomEvent.TrackSubscribed, (remote, publication, participant) => {
-        if (current !== call || participant.identity !== avatarIdentity) return;
-        if (remote.kind === Track.Kind.Video) {
+        if (current !== call) return;
+        if (remote.kind === Track.Kind.Video && !voiceOnly && participant.identity === avatarIdentity) {
           if (call.videoOff || publication !== call.videoPublication) return;
           call.videoTrack?.detach(video);
           call.videoTrack = remote;
@@ -444,7 +460,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
               call.firstMedia.first_video_ms = Math.round(performance.now() - call.startedAt);
             });
           }
-        } else if (remote.kind === Track.Kind.Audio) {
+        } else if (remote.kind === Track.Kind.Audio && participant.identity === audioIdentity) {
           call.audioTrack?.detach(audio);
           call.audioTrack = remote;
           remote.attach(audio);
