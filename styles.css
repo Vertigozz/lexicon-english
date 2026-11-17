@@ -314,11 +314,12 @@ a.btn { text-decoration: none; }
 .favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
 .favorite-entry-actions .favorite-bookmark { color:var(--accent); }
 .entry-action { position:relative; display:flex; }
+.entry-action > .icon-btn { width:var(--touch-size); }
 .entry-action .btn[aria-disabled="true"] { cursor:wait; opacity:.57; }
 .entry-hint {
   position:absolute;
   z-index:2;
-  inset-block-start:100%;
+  inset-block-start:calc(100% + .65rem);
   inset-inline-end:0;
   padding:.35rem .65rem;
   border:1px solid var(--line);
@@ -327,8 +328,28 @@ a.btn { text-decoration: none; }
   color:var(--text);
   box-shadow:0 4px 12px var(--shadow);
   font-size:.875rem;
+  font-weight:500;
   white-space:nowrap;
   visibility:hidden;
+}
+.entry-hint::before {
+  content:"";
+  position:absolute;
+  inset-block-start:0;
+  inset-inline-end:calc(var(--touch-size) / 2);
+  width:.5rem;
+  height:.5rem;
+  background:inherit;
+  border-top:1px solid var(--line);
+  border-left:1px solid var(--line);
+  transform:translate(50%, -55%) rotate(45deg);
+}
+.entry-hint::after {
+  content:"";
+  position:absolute;
+  inset-inline:0;
+  inset-block-end:100%;
+  height:.65rem;
 }
 .entry-action > .btn:focus-visible + .entry-hint { visibility:visible; }
 @media (hover:hover) {
