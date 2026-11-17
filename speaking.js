@@ -31,20 +31,45 @@ const tutorFields = {
 };
 const pauseOptions = new Map([['', 'По смыслу фразы'], ['1000', '1 секунда'], ['1500', '1,5 секунды'],
   ['2000', '2 секунды'], ['2500', '2,5 секунды'], ['3000', '3 секунды'], ['4000', '4 секунды']]);
+const callIcon = (shape, toggle = false) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  ${shape}${toggle ? '<path class="speaking-icon-slash" d="M3 3l18 18"/>' : ''}</svg>`;
+const videoIcon = '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/>';
+const micIcon = '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11v1a7 7 0 0 0 14 0v-1m-7 8v3m-3 0h6"/>';
+const hangUpIcon = '<path d="M3 12a13 13 0 0 1 18 0v4l-5 1-1.5-3a9 9 0 0 0-5 0L8 17l-5-1Z"/>';
 
 export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }) {
   root.innerHTML = `
     <section class="neo speaking-panel" aria-label="Голосовой урок">
-      <div class="speaking-media" hidden>
-        <video aria-label="Видео аватара Obvious Thrush" playsinline muted autoplay></video>
+      <div class="speaking-call" hidden>
+        <div class="speaking-stage">
+          <div class="speaking-video-placeholder">${callIcon(videoIcon)}<span>Подключаем видео…</span></div>
+          <video aria-label="Видео аватара Obvious Thrush" playsinline muted autoplay hidden></video>
+        </div>
+        <div class="speaking-controls speaking-call-controls" role="group" aria-label="Управление звонком">
+          <button type="button" class="btn subtle speaking-icon-button speaking-toggle-video">${callIcon(videoIcon, true)}</button>
+          <button type="button" class="btn subtle speaking-icon-button speaking-mic">${callIcon(micIcon, true)}</button>
+          <button type="button" class="btn speaking-icon-button speaking-end" aria-label="Завершить звонок" title="Завершить звонок">${callIcon(hangUpIcon)}</button>
+        </div>
+        <div class="speaking-call-info">
+          <p class="speaking-countdown" role="timer" hidden></p>
+        </div>
+        <div class="speaking-controls speaking-turn-controls">
+          <button type="button" class="btn primary speaking-unlock" hidden>Включить звук</button>
+          <button type="button" class="btn primary speaking-done" hidden>Готово</button>
+        </div>
       </div>
+      <div class="speaking-chat" hidden>
+        <div class="speaking-chat-scroll" role="log" aria-label="Диалог" tabindex="0">
+          <p class="speaking-chat-empty">Здесь появятся реплики разговора</p>
+          <ol class="speaking-messages"></ol>
+        </div>
+      </div>
+      <audio autoplay></audio>
       <div class="speaking-copy">
-        <audio autoplay></audio>
         <p class="speaking-intro">Поговори по-английски с AI-тьютором. После подключения тьютора у тебя до 30 минут.</p>
         <p class="speaking-privacy">Голос обрабатывают LiveKit и OpenAI. Simli озвучивает аватар. Lexicon не сохраняет запись или расшифровку.</p>
         <p class="speaking-status" role="status" aria-live="polite"></p>
-        <p class="speaking-countdown" role="timer" hidden></p>
-        <p class="speaking-caption" lang="en" aria-live="polite" hidden></p>
         <fieldset class="speaking-mode" aria-describedby="speaking-mode-hint">
           <legend>Смена реплик</legend>
           <label><input type="radio" name="speaking-mode" value="auto"> Авто</label>
@@ -69,24 +94,25 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
             </div>`).join('')}
         </fieldset>
         <p class="speaking-live-note" hidden>GPT‑Live‑1 сам определяет смену реплик и темп речи. Голосовая сессия OpenAI стоит $0,05 за минуту.</p>
-        <p class="speaking-mode-current" hidden></p>
         <div class="speaking-controls">
-          <button class="btn primary speaking-start">Начать звонок</button>
-          <button class="btn primary speaking-unlock" hidden>Включить звук</button>
-          <button class="btn primary speaking-done" hidden>Готово</button>
-          <button class="btn subtle speaking-mic" hidden>Выключить микрофон</button>
-          <button class="btn subtle speaking-toggle-video" hidden>Выключить видео</button>
-          <button class="btn subtle speaking-end" hidden>Завершить</button>
+          <button type="button" class="btn primary speaking-start">Начать звонок</button>
         </div>
       </div>
     </section>`;
   const find = selector => root.querySelector(selector);
-  const media = find('.speaking-media');
+  const panel = find('.speaking-panel');
+  const setup = find('.speaking-copy');
+  const callPanel = find('.speaking-call');
+  const callInfo = find('.speaking-call-info');
+  const chat = find('.speaking-chat');
+  const chatScroll = find('.speaking-chat-scroll');
+  const chatEmpty = find('.speaking-chat-empty');
+  const messages = find('.speaking-messages');
   const video = find('video');
+  const videoPlaceholder = find('.speaking-video-placeholder span');
   const audio = find('audio');
   const status = find('.speaking-status');
   const countdown = find('.speaking-countdown');
-  const caption = find('.speaking-caption');
   const start = find('.speaking-start');
   const unlock = find('.speaking-unlock');
   const done = find('.speaking-done');
@@ -95,7 +121,6 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
   const end = find('.speaking-end');
   const modePicker = find('.speaking-mode');
   const modeHint = find('#speaking-mode-hint');
-  const modeCurrent = find('.speaking-mode-current');
   const pauseSettings = find('.speaking-pause');
   const pauseSelect = find('#speaking-pause');
   const tutorSettings = find('.speaking-tutor-settings');
@@ -148,27 +173,36 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
 
   function render(message) {
     if (disposed) return;
-    start.hidden = Boolean(current);
+    const inCall = Boolean(current);
+    if (callPanel.hidden === inCall) {
+      panel.classList.toggle('speaking-panel-active', inCall);
+      callPanel.hidden = chat.hidden = !inCall;
+      setup.hidden = inCall;
+      if (inCall) {
+        callInfo.prepend(status);
+        end.focus();
+      } else {
+        setup.querySelector('.speaking-privacy').after(status);
+        if (!closing) start.focus();
+      }
+    }
     start.disabled = Boolean(closing);
-    end.hidden = !current;
     unlock.hidden = !current?.workerReady || current.unlocked && !current.audioBlocked;
-    modePicker.hidden = Boolean(current) || isLive();
+    modePicker.hidden = isLive();
     modePicker.disabled = Boolean(closing);
-    tutorSettings.hidden = Boolean(current);
     tutorSettings.disabled = Boolean(closing);
     speedSelect.closest('.speaking-option').hidden = isLive();
-    liveNote.hidden = Boolean(current) || !isLive();
-    modeCurrent.hidden = !current;
-    modeCurrent.textContent = current?.mode === 'auto' ? 'Смена реплик · Авто' : 'Смена реплик · Вручную';
-    if (current?.pauseMs != null) modeCurrent.textContent += ` · ${pauseOptions.get(String(current.pauseMs))}`;
-    if (current) modeCurrent.textContent += ` · ${tutorFields.voiceModel.choices.find(([value]) => value === current.preferences.voiceModel)[1]}`;
+    liveNote.hidden = !isLive();
     done.hidden = current?.mode !== 'manual' || current?.phase !== 'listening';
-    mic.hidden = !current?.unlocked || !['speaking', 'listening', 'thinking'].includes(current.phase);
     done.disabled = Boolean(current?.sending || current?.paused || current?.audioBlocked);
-    mic.disabled = current?.phase !== 'listening';
-    mic.textContent = current?.paused ? 'Включить микрофон' : 'Выключить микрофон';
-    toggleVideo.hidden = !current?.videoPublication;
-    toggleVideo.textContent = current?.videoOff ? 'Включить видео' : 'Выключить видео';
+    mic.disabled = !current?.unlocked || current.phase !== 'listening';
+    toggleVideo.disabled = !current?.videoPublication;
+    const micOff = mic.disabled || Boolean(current?.paused || current?.audioBlocked);
+    setCallButton(mic, micOff, current?.paused ? 'Включить микрофон'
+      : mic.disabled ? 'Микрофон выключен до твоего хода' : 'Выключить микрофон');
+    setCallButton(toggleVideo, Boolean(current?.videoOff), current?.videoOff ? 'Включить видео'
+      : toggleVideo.disabled ? 'Видео подключается' : 'Выключить видео');
+    videoPlaceholder.textContent = current?.videoOff ? 'Видео выключено' : 'Подключаем видео…';
     if (message !== undefined) status.textContent = message;
     else if (current?.workerReady && (!current.unlocked || current.audioBlocked)) {
       status.textContent = 'Нажми «Включить звук», чтобы услышать тьютора.';
@@ -176,6 +210,29 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
       status.textContent = current.pauseMs === null ? 'Твой ход. Тьютор ответит, когда ты закончишь.'
         : 'Твой ход. Пауза передаст слово тьютору.';
     } else status.textContent = phases[current?.phase] || '';
+  }
+
+  function setCallButton(button, off, label) {
+    button.classList.toggle('speaking-icon-off', off);
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
+  function appendMessage({ speaker, text }) {
+    if (!['learner', 'tutor'].includes(speaker) || typeof text !== 'string' || !text.trim()) return;
+    const follow = chatScroll.scrollHeight - chatScroll.scrollTop - chatScroll.clientHeight <= 24;
+    const bubble = document.createElement('li');
+    bubble.className = `speaking-message speaking-message-${speaker}`;
+    const name = document.createElement('span');
+    name.className = 'speaking-message-author';
+    name.textContent = speaker === 'learner' ? 'Ты' : 'Тьютор';
+    const phrase = document.createElement('p');
+    phrase.lang = 'en';
+    phrase.textContent = text.trim();
+    bubble.append(name, phrase);
+    chatEmpty.hidden = true;
+    messages.append(bubble);
+    if (follow) chatScroll.scrollTop = chatScroll.scrollHeight;
   }
 
   function setPhase(call, state) {
@@ -256,16 +313,17 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     call.audioTrack?.detach(audio);
     video.srcObject = null;
     audio.srcObject = null;
-    media.hidden = true;
+    video.hidden = true;
     countdown.hidden = true;
     countdown.textContent = '';
-    caption.hidden = true;
-    caption.textContent = '';
+    messages.replaceChildren();
+    chatEmpty.hidden = false;
     closing = Promise.allSettled([call.room.disconnect(), release(call)]);
     render(message);
     await closing;
     closing = undefined;
     render(message);
+    if (!disposed && (document.activeElement === document.body || callPanel.contains(document.activeElement))) start.focus();
   }
 
   async function sampleMedia(call) {
@@ -376,7 +434,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
           call.videoTrack = remote;
           remote.attach(video);
           video.muted = true;
-          media.hidden = false;
+          video.hidden = false;
           if (!call.firstVideoSeen && video.requestVideoFrameCallback) {
             if (call.videoFrame !== undefined) video.cancelVideoFrameCallback(call.videoFrame);
             call.videoFrame = video.requestVideoFrameCallback(() => {
@@ -401,7 +459,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         if (current !== call) return;
         if (remote === call.videoTrack) {
           remote.detach(video);
-          media.hidden = true;
+          video.hidden = true;
           call.videoTrack = undefined;
           call.lastMediaStats.delete('video');
           if (call.videoFrame !== undefined) {
@@ -426,10 +484,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         let data;
         try { data = JSON.parse(decoder.decode(payload)); } catch { return; }
         if (topic === 'lexicon.state') setPhase(call, data);
-        if (topic === 'lexicon.caption' && typeof data.text === 'string') {
-          caption.textContent = data.text;
-          caption.hidden = false;
-        }
+        if (topic === 'lexicon.caption' && data) appendMessage(data);
       });
       room.on(RoomEvent.Reconnecting, () => {
         if (current !== call) return;
@@ -546,7 +601,7 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
     if (!call?.videoPublication) return;
     call.videoOff = !call.videoOff;
     call.videoPublication.setSubscribed(!call.videoOff);
-    media.hidden = call.videoOff || !call.videoTrack;
+    video.hidden = call.videoOff || !call.videoTrack;
     render();
   });
   mic.addEventListener('click', () => {
