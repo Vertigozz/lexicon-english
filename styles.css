@@ -309,6 +309,10 @@ a.btn { text-decoration: none; }
 .dictionary-panel a { text-decoration:underline; text-underline-offset:.15em; }
 .dictionary-panel a.btn { text-decoration:none; }
 .favorites-toolbar { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; margin:1rem 0; }
+.favorite-entry-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
+.favorite-entry-header h2 { min-width:0; margin:.35rem 0 0; }
+.favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
+.favorite-entry-actions .favorite-bookmark { color:var(--accent); }
 .dictionary-panel .favorites-note { font-size:.875rem; line-height:1.5; margin-bottom:1rem; }
 @media(max-width:767px) {
   .dictionary-panel { padding:1rem; }

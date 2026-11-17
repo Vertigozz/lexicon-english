@@ -8,6 +8,7 @@ export class Favorites {
   async refresh(){
     if(!this.user||this.loading)return;
     this.loading=true;this.error='';
+    const before = new Map(this.rows.map(row => [row.entry_key, {row, pronunciations:row.pronunciations}]));
     try{
       const rows=[];
       let page;
@@ -16,13 +17,17 @@ export class Favorites {
         if(error)throw error;
         page=data||[];rows.push(...page);
       }while(page.length===500);
-      // Favorites are append-only. Retain an addition that completed during this read.
-      for(const row of this.rows){
-        const remote=rows.find(r=>r.entry_key===row.entry_key);
-        if(!remote)rows.push(row);
-        else if(remote.pronunciations==null&&row.pronunciations!=null)remote.pronunciations=row.pronunciations;
+      // Keep writes completed on this device while the server snapshot was loading.
+      const current = new Map(this.rows.map(row => [row.entry_key, row]));
+      const merged = new Map(rows.map(row => [row.entry_key, row]));
+      for (const key of before.keys()) {
+        if (!current.has(key)) merged.delete(key);
       }
-      this.rows=rows;this.loaded=true;
+      for (const [key, row] of current) {
+        const previous = before.get(key);
+        if (row !== previous?.row || row.pronunciations !== previous.pronunciations) merged.set(key, row);
+      }
+      this.rows = [...merged.values()];this.loaded=true;
     }catch(error){console.warn('Favorites load failed',error.code||error.name||'unknown');this.error='Не удалось загрузить избранное. Проверьте подключение и повторите.';}
     finally{this.loading=false;}
   }
@@ -35,6 +40,13 @@ export class Favorites {
     if(error)throw new Error('Не удалось сохранить слово. Проверьте подключение и повторите.');
     if(!this.rows.some(r=>r.entry_key===entry_key))this.rows.unshift(row);
     return entry_key;
+  }
+  async remove(key) {
+    if (!this.user) throw new Error('Войдите в аккаунт.');
+    const {error} = await this.client.from('lexicon_favorites').delete()
+      .eq('user_id', this.user.id).eq('entry_key', key).abortSignal(AbortSignal.timeout(30000));
+    if (error) throw new Error('Не удалось удалить значение из избранного. Повторите попытку.');
+    this.rows = this.rows.filter(row => row.entry_key !== key);
   }
   async addPronunciations(row,pronunciations){
     if(!this.user)throw new Error('Войдите в аккаунт.');

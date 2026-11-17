@@ -1,5 +1,5 @@
 import {lookupWord,sourceURL,WIKI_LICENSE} from './wiktionary.js?v=13';
-import {Favorites} from './favorites.js';
+import {Favorites} from './favorites.js?v=25';
 import {SharedDecks,installSharedDecks} from './shared-decks.js';
 import {normalize,uid,localDate,addDays,checkAnswer,shuffle,makeEvent,appendEvent,derive,reviewQueue,nextModule,selectContext,validatePackage,mergePackage,validateBackup,learningTotals} from './core.js';
 import {openStorage,readState,writeState} from './storage.js';
@@ -35,11 +35,11 @@ function dictionaryNavigation(){
 function sourceCredit(entry){
   return `<p class="dictionary-source">Источник <a href="${esc(sourceURL(entry))}" target="_blank" rel="noopener noreferrer">Викисловарь · ${esc(entry.source_title)}</a> · <a href="${WIKI_LICENSE}" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></p>`;
 }
-function pronunciationHTML(entry){
+function pronunciationHTML(entry,{inlineSpeech=true}={}){
   const variants=Array.isArray(entry.pronunciations)?entry.pronunciations.filter(v=>v&&typeof v.ipa==='string'&&v.ipa.length<=120).slice(0,4):[];
   return `<div class="dictionary-pronunciation">
     ${variants.length?variants.map(v=>`<p class="dictionary-ipa" lang="en">[${esc(v.ipa)}]</p>`).join(''):`<p class="tiny">${entry.pronunciations===null||entry.pronunciations===undefined?'Транскрипция ещё не загружена.':'В статье нет транскрипции.'}</p>`}
-    ${btn(icon('sound')+' Озвучить','dictionary-speak','text-btn',`data-word="${esc(entry.word)}" aria-label="Озвучить ${esc(entry.word)}"`)}
+    ${inlineSpeech?btn(icon('sound')+' Озвучить','dictionary-speak','text-btn',`data-word="${esc(entry.word)}" aria-label="Озвучить ${esc(entry.word)}"`):''}
   </div>`;
 }
 function pronounceWord(word,language='en-GB'){
@@ -80,7 +80,15 @@ function favoritesPage(){
     ${!accountUser?'<p><a class="btn primary" href="#settings">Войти в аккаунт</a></p>':
       `<div class="favorites-toolbar"><span>${favorites.loaded?'Сохранено значений: '+favorites.rows.length:'Личное избранное'}</span>${btn(favorites.loading?'Загружаем…':'Обновить','favorites-refresh','subtle',favorites.loading?'disabled':'')}</div>
       ${favorites.error?`<p role="status">${esc(favorites.error)}</p>`:''}
-      ${favorites.rows.map(entry=>`<article class="dictionary-entry"><h2 lang="en">${esc(entry.word)}</h2>${pronunciationHTML(entry)}<p>${esc(entry.translation)}</p>${sourceCredit(entry)}
+      ${favorites.rows.map(entry=>`<article class="dictionary-entry">
+      <div class="favorite-entry-header">
+        <h2 lang="en" tabindex="-1">${esc(entry.word)}</h2>
+        <div class="favorite-entry-actions">
+          ${btn(icon('sound'),'dictionary-speak','icon-btn',`type="button" data-word="${esc(entry.word)}" aria-label="Озвучить ${esc(entry.word)}" title="Озвучить"`)}
+          ${btn('<svg class="icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z"/></svg>','favorite-remove','icon-btn favorite-bookmark',`type="button" data-key="${esc(entry.entry_key)}" title="Удалить из избранного" aria-label="Удалить из избранного: ${esc(entry.word)}" ${favorites.pending.has(entry.entry_key)?'disabled':''}`)}
+        </div>
+      </div>
+      ${pronunciationHTML(entry,{inlineSpeech:false})}<p>${esc(entry.translation)}</p>${sourceCredit(entry)}
       ${entry.pronunciations===null||entry.pronunciations===undefined?btn(favorites.pending.has(entry.entry_key)?'Загружаем…':'Загрузить транскрипцию','favorite-pronunciation','subtle',`data-key="${esc(entry.entry_key)}" ${favorites.pending.has(entry.entry_key)?'disabled':''}`):''}</article>`).join('')}
       ${favorites.loaded&&!favorites.rows.length?'<div class="empty-state"><h2>Здесь будут сохранённые слова</h2><p>Найдите перевод и добавьте нужное значение.</p><a class="btn primary" href="#dictionary">Найти перевод</a></div>':''}
       ${!favorites.loaded&&!favorites.error?'<p role="status">Загружаем избранное…</p>':''}`}
@@ -527,6 +535,32 @@ async function actions(action,el){
     return;
   }
   if(action==='favorites-refresh')return refreshFavorites();
+  if(action==='favorite-remove'){
+    const target=favorites,key=el.dataset.key;
+    const index=target.rows.findIndex(row=>row.entry_key===key);
+    if(index<0||!accountUser||target.pending.has(key))return;
+    target.pending.add(key);
+    el.disabled=true;
+    let removed=false;
+    try{
+      await target.remove(key);
+      removed=true;
+      if(target===favorites)toast('Значение удалено из избранного.');
+    }finally{
+      target.pending.delete(key);
+      if(target===favorites&&route==='favorites'){
+        const shouldRestoreFocus=document.activeElement===el||document.activeElement===document.body;
+        render();
+        if(shouldRestoreFocus){
+          const entries=document.querySelectorAll('.favorite-entry-header');
+          const next=entries[Math.min(index,entries.length-1)];
+          const focusTarget=removed?next?.querySelector('h2'):next?.querySelector('[data-action="favorite-remove"]');
+          (focusTarget||$('[data-action="favorites-refresh"]'))?.focus({preventScroll:true});
+        }
+      }else if(target===favorites)paintDictionaryResults();
+    }
+    return;
+  }
   if(action==='favorite-add'){
     const entry=dictionary.results[Number(el.dataset.index)];
     if(!entry||!accountUser)return;
