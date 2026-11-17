@@ -354,6 +354,10 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
             if (freezes > 0) report.video_freezes = freezes;
             if (freezeMs > 0) report.video_freeze_ms = freezeMs;
           } else {
+            const transport = stats.get(row.transportId);
+            const pair = stats.get(transport?.selectedCandidatePairId);
+            const candidate = stats.get(pair?.localCandidateId);
+            if (candidate?.candidateType) report.connection_relay = Number(candidate.candidateType === 'relay');
             for (const [source, target] of [['packetsReceived', 'audio_received'], ['packetsDiscarded', 'audio_discarded'],
               ['concealedSamples', 'audio_concealed']]) {
               if (Number.isFinite(row[source]) && Number.isFinite(before[source])) {
@@ -514,11 +518,28 @@ export function mountSpeaking(root, { endpoint, publishableKey, getAccessToken }
         if (call.workerReady) rpc(call, 'lexicon.status').then(state => setPhase(call, state)).catch(() => void stop('Связь не восстановилась.'));
       });
       room.on(RoomEvent.Disconnected, () => {
-        if (current === call) void stop('Соединение завершено. Можно начать новый звонок.');
+        if (current === call && call.roomConnected) void stop('Соединение завершено. Можно начать новый звонок.');
       });
       room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
-      await room.connect(serverUrl, participantToken, { autoSubscribe: false, maxRetries: 1, websocketTimeout: 8_000 });
+      const connectOptions = { autoSubscribe: false, maxRetries: 1, websocketTimeout: 8_000 };
+      if (voiceOnly) {
+        await room.connect(serverUrl, participantToken, connectOptions);
+      } else {
+        try {
+          await room.connect(serverUrl, participantToken, {
+            ...connectOptions, maxRetries: 0, peerConnectionTimeout: 8_000,
+            rtcConfig: { iceTransportPolicy: 'relay' },
+          });
+        } catch (error) {
+          if (current !== call || error.status === 401 || error.status === 403) throw error;
+          // Reuse the same room and token when the relay is unavailable.
+          await room.connect(serverUrl, participantToken, {
+            ...connectOptions, rtcConfig: { iceTransportPolicy: 'all' },
+          });
+        }
+      }
       if (current !== call) { await room.disconnect(); return; }
+      call.roomConnected = true;
       room.localParticipant.setTrackSubscriptionPermissions(false, [{ participantIdentity: workerIdentity, allowAll: true }]);
       for (const participant of room.remoteParticipants.values()) {
         for (const publication of participant.trackPublications.values()) subscribe(publication, participant);
