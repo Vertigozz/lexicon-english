@@ -10,12 +10,24 @@ export class CloudSync {
   }
   async start(){
     if(!configured){this.status('unconfigured');return;}
+    const urlParams = new URLSearchParams(location.hash.slice(1));
+    const recoveryToken = urlParams.get('type') === 'recovery' ? urlParams.get('access_token') : null;
+    let lastRecoveryToken;
+    const notifyRecovery = session => {
+      if (!session?.user || !session.access_token || session.access_token === lastRecoveryToken) return;
+      lastRecoveryToken = session.access_token;
+      this.recovery?.(session.user);
+    };
     const {createClient}=await import('./vendor/supabase.js');
     this.client=createClient(cloudConfig.url,cloudConfig.publishableKey,{
       auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lexicon-cloud-auth-v1'}
     });
-    this.client.auth.onAuthStateChange((event,session)=>{setTimeout(async()=>{try{await this.setUser(session?.user||null);if(event==='PASSWORD_RECOVERY')this.recovery?.();}catch(e){this.status('error',null,e.message);}},0);});
+    this.client.auth.onAuthStateChange((event,session)=>{
+      if(event==='PASSWORD_RECOVERY')notifyRecovery(session);
+      setTimeout(async()=>{try{await this.setUser(session?.user||null);}catch(e){this.status('error',null,e.message);}},0);
+    });
     const {data,error}=await this.client.auth.getSession();if(error)throw error;
+    if(recoveryToken && recoveryToken === data.session?.access_token)notifyRecovery(data.session);
     await this.setUser(data.session?.user||null);
     this.interval=setInterval(()=>{if(!document.hidden)this.sync();},15000);
   }

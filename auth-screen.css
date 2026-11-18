@@ -1,0 +1,43 @@
+.auth-screen{color-scheme:light;--bg:#e8edf3;--panel:#f6f8fc;--text:#273449;--muted:#536277;--accent:#3c50bd;--accent-hover:#30429f;--line:#cbd3df;--soft:#e6eaf9;--shadow:#bdc8da;--on-accent:#fff}
+[data-theme=dark] .auth-screen{color-scheme:dark;--bg:#252b36;--panel:#303847;--text:#f1f4fa;--muted:#bec8d8;--accent:#a9b7ff;--accent-hover:#c3ceff;--line:#505d73;--soft:#384364;--shadow:#191e28;--on-accent:#202940}
+.auth-screen{min-height:100vh;min-height:100svh;background:var(--bg);color:var(--text);font:16px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.auth-screen :is(button,input):focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.auth-screen [hidden]{display:none!important}
+.auth-top{width:min(1120px,100%);margin:auto;padding:24px 28px;display:flex;justify-content:space-between;align-items:center}
+.auth-brand{display:flex;align-items:center;gap:11px;font-size:25px;font-weight:750;letter-spacing:-.04em}
+.auth-brand img{width:38px;height:38px}.auth-dot{color:var(--accent)}
+.auth-theme{min-height:44px;padding:0 14px;border:1px solid var(--line);background:var(--panel);border-radius:12px;font-size:14px}
+.auth-layout{width:min(1120px,100%);margin:0 auto;padding:32px 28px 56px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(36px,6vw,96px);align-items:center;min-height:calc(100svh - 92px)}
+.auth-intro{max-width:460px}
+.auth-intro h2{font-size:clamp(2.3rem,5vw,4.5rem);line-height:1.02;letter-spacing:-.065em;margin:0 0 20px}
+.auth-intro p{margin:0;color:var(--muted);max-width:33ch;font-size:1.06rem}
+.auth-sample{position:relative;width:min(310px,90%);margin:44px 0 0;padding:24px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:20px;background:var(--panel);box-shadow:10px 16px 30px -16px var(--shadow);transform:rotate(-4deg)}
+.auth-sample strong{display:block;font-size:1.8rem;letter-spacing:-.04em}
+.auth-sample span{display:block;color:var(--muted)}
+.auth-sample span+span{margin-top:10px}
+.auth-card{width:100%;max-width:470px;justify-self:end;padding:clamp(20px,4vw,38px);border:1px solid var(--line);border-radius:24px;background:var(--panel);box-shadow:0 20px 40px -22px var(--shadow)}
+.auth-switch{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--bg);border:1px solid var(--line);border-radius:13px;margin-bottom:27px}
+.auth-switch button{border:1px solid transparent;background:transparent;border-radius:9px;min-height:44px;padding:5px;font-size:14px;font-weight:650;color:var(--muted)}
+.auth-switch button[aria-pressed=true]{color:var(--accent);background:var(--panel);border-color:var(--line)}
+.auth-card h1{margin:0;font-size:clamp(1.65rem,4vw,2rem);line-height:1.15;letter-spacing:-.035em}
+.auth-copy{margin:10px 0 23px;color:var(--muted);font-size:15px}
+.auth-card label{display:block;font-size:14px;font-weight:650;margin:0 0 7px}
+.auth-card input{width:100%;min-height:48px;padding:10px 13px;border:1px solid var(--line);background:var(--bg);border-radius:11px}
+.auth-password{position:relative}.auth-password input{padding-inline-end:92px}
+.auth-password button{position:absolute;inset:2px 3px 2px auto;border:0;background:transparent;color:var(--accent);padding:0 9px;font-size:14px;font-weight:600}
+.auth-field+.auth-field{margin-top:17px}.auth-footnote{display:block;color:var(--muted);margin-top:6px;font-size:14px}
+.auth-link{border:0;padding:0;background:transparent;color:var(--accent);font-weight:650;min-height:44px;text-align:left;text-underline-offset:4px}.auth-link:hover{text-decoration:underline}
+.auth-forgot{margin-top:4px}
+.auth-primary{min-height:48px;width:100%;margin-top:14px;border:0;border-radius:11px;background:var(--accent);color:var(--on-accent);font-weight:650;padding:10px 12px}.auth-primary:hover{background:var(--accent-hover)}
+.auth-secondary{margin-top:16px;width:100%;min-height:44px;border:1px solid var(--line);background:transparent;border-radius:11px;font-size:15px;font-weight:600;padding:8px 12px}
+.auth-guest{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);text-align:center}.auth-guest p{margin:0;color:var(--muted);font-size:14px}
+.auth-status{margin:13px 0 0;padding:9px 12px;border-radius:10px;background:var(--soft);font-size:14px}
+@media(max-width:730px){
+  .auth-layout{display:block;min-height:0;padding:10px 16px 35px}
+  .auth-top{padding:16px}
+  .auth-intro{display:none}
+  .auth-card{margin:auto}
+}
+
+.auth-screen h2{font-weight:750}
+.auth-card button:disabled{cursor:wait}
