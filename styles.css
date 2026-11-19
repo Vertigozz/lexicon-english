@@ -213,6 +213,23 @@ a.btn { text-decoration: none; }
 .exercise-kicker, .exercise-foot, .exercise-foot > span { font-size: .875rem; }
 .exercise-kicker { letter-spacing: .025em; margin-bottom: 1rem; }
 .exercise-question { line-height: 1.4; overflow-wrap: anywhere; }
+.gap-answer {
+  color: var(--accent);
+  background: color-mix(in srgb,var(--accent) 13%,transparent);
+  border-radius: .28em;
+  padding: .02em .16em;
+  font-weight: 700;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .gap-reveal { animation: gap-reveal 560ms ease-out; }
+  @keyframes gap-reveal {
+    from { color: transparent; background: transparent; }
+    38% { color: var(--accent); background: color-mix(in srgb,var(--accent) 25%,transparent); }
+    to { color: var(--accent); background: color-mix(in srgb,var(--accent) 13%,transparent); }
+  }
+}
 .exercise-translation, .word-study .ipa, .word-study .word-examples p, .word-study .word-examples span,
 .word-examples span, .word-translation { font-size: 1rem; }
 .answer-input { min-height: 48px; font-size: 1.25rem; }
