@@ -610,12 +610,17 @@ function studyPage({animateAnswer}={}){const a=state.session;if(!a)return `${hea
 }
 function feedbackHTML(a,w,c,type,animate){
   const f=a.feedback;
-  const successText=c?c.en.split('{{gap}}').join(completedGap(c,a.input)):
+  const solution=c?c.en.split('{{gap}}').join(completedGap(c,a.input)):
     type==='recall'?recallAnswer(a,w):'';
-  const status=f.correct?`<div class="answer-success" role="status"><span class="sr-only">Верно!</span>
-    ${successText?`<span class="sr-only" lang="en">${esc(successText)}</span>`:''}
-    <svg class="answer-check${animate?' answer-check-reveal':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path pathLength="1" d="M4.5 12.5 9.5 17.5 19.5 7"/></svg>
-  </div>`:`<div class="answer-feedback incorrect" role="status"><div>${icon('info')}<strong>${f.typo?'Похоже на опечатку':'Пока не получилось'}</strong></div><p>${f.typo?'Опечатка не засчитывается. ':''}Правильный ответ: <strong lang="${type==='enru'?'ru':'en'}">${esc(f.accepted.join(' / '))}</strong></p></div>`;
+  const message=f.correct?'Верно!':f.typo?'Опечатка не засчитывается.':'Ответ неверный.';
+  const shape=f.correct?'<path pathLength="1" d="M4.5 12.5 9.5 17.5 19.5 7"/>':
+    '<path pathLength="1" d="M6 6 18 18"/><path pathLength="1" d="M18 6 6 18"/>';
+  const status=`<div class="answer-status ${f.correct?'answer-success':'answer-error'}" role="status">
+    <span class="sr-only">${message}</span>
+    ${solution?`<span class="sr-only" lang="en">${esc(solution)}</span>`:''}
+    <svg class="answer-mark ${f.correct?'answer-check':'answer-cross'}${animate?' answer-mark-reveal':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shape}</svg>
+    ${type==='enru'&&!f.correct?`<p class="answer-correction">Правильный ответ: <strong lang="ru">${esc(f.accepted.join(' / '))}</strong></p>`:''}
+  </div>`;
   return status+btn(nextUnansweredTask(a)<0?'Посмотреть результат '+icon('arrow'):'Продолжить '+icon('arrow'),'next-question','primary full','type="button"');
 }
 async function checkCurrent(){
