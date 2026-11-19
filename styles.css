@@ -178,6 +178,18 @@ a.btn { text-decoration: none; }
 .study-top { margin: 0 0 1rem; gap: .5rem .75rem; }
 .study-top .text-btn, .study-top > span, .study-top > .badge { font-size: .875rem; }
 .study-container, .result-container { width: min(100%, 45rem); margin-inline: auto; }
+.study-browse { display: flex; justify-content: flex-end; margin: -.5rem 0 .75rem; }
+.card-browser-nav {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .5rem;
+  margin-bottom: .75rem;
+}
+.card-browser-nav > p { margin: 0; text-align: center; color: var(--muted); font-size: .875rem; overflow-wrap: anywhere; }
+.card-browser-nav .btn { min-width: var(--touch-size); padding-inline: .625rem; }
+.card-browser-view { touch-action: pan-y pinch-zoom; overflow-wrap: anywhere; }
+.card-browser-view .word-head h3 { min-width: 0; }
 .exercise-progress span { font-size: .875rem; white-space: nowrap; }
 .exercise-kicker, .exercise-foot, .exercise-foot > span { font-size: .875rem; }
 .exercise-kicker { letter-spacing: .025em; margin-bottom: 1rem; }
