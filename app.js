@@ -623,6 +623,11 @@ function feedbackHTML(a,w,c,type,animate){
   </div>`;
   return status+btn(nextUnansweredTask(a)<0?'Посмотреть результат '+icon('arrow'):'Продолжить '+icon('arrow'),'next-question','primary full','type="button"');
 }
+function vibrateAnswer(correct){
+  if(typeof navigator.vibrate!=='function'||!matchMedia('(any-pointer: coarse)').matches||
+    !matchMedia('(prefers-reduced-motion: no-preference)').matches)return;
+  try{navigator.vibrate(correct?30:[30,65,30]);}catch{}
+}
 async function checkCurrent(){
   const a=state.session;
   if(studyMoving||!a||a.feedback||a.phase==='result'||a.phase==='study')return;
@@ -636,6 +641,7 @@ async function checkCurrent(){
   if(a.cardDrafts)delete a.cardDrafts[t.attemptId];
   studyMoving=true;
   try{
+    vibrateAnswer(result.correct);
     await save();
     render({animateAnswer:t.attemptId});
     $('[data-action="next-question"]')?.focus({preventScroll:true});
