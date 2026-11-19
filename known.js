@@ -1,4 +1,5 @@
 import {derive,makeEvent,appendEvent} from './core.js';
+import {nextUnansweredTask,selectPracticeTask} from './study-navigation.js?v=40';
 
 export function setWordKnown(state,wordId,known=true){
   const word=state.decks.find(d=>d.deck.id===state.activeDeckId)?.words.find(w=>w.id===wordId);
@@ -23,6 +24,7 @@ export function reconcileKnownSession(state){
   a.tasks=oldTasks.filter(t=>!known.has(t.wordId));
   const ids=new Set(a.tasks.map(t=>t.attemptId));
   a.answers=a.answers.filter(e=>ids.has(e.id));
+  for(const id of Object.keys(a.cardDrafts||{}))if(!ids.has(id))delete a.cardDrafts[id];
   if(!a.wordIds.length||!a.tasks.length){state.session=null;return state;}
   if(a.phase==='study'){
     const currentWord=oldWords[oldStudyIndex];
@@ -36,10 +38,11 @@ export function reconcileKnownSession(state){
     const retained=a.tasks.findIndex(t=>t.attemptId===current?.attemptId);
     if(retained>=0)a.index=retained;
     else {
-      const next=oldTasks.slice(oldIndex+1).find(t=>!known.has(t.wordId));
-      a.index=next?a.tasks.findIndex(t=>t.attemptId===next.attemptId):a.tasks.length-1;
-      a.phase=a.tasks[a.index].type;a.input='';a.feedback=null;
-      if(!next)a.exhausted=true;
+      a.index=oldTasks.slice(0,oldIndex).filter(task=>ids.has(task.attemptId)).length-1;
+      const next=nextUnansweredTask(a);
+      const words=state.decks.find(deck=>deck.deck.id===a.deckId).words;
+      selectPracticeTask(a,next<0?a.tasks.length-1:next,words);
+      if(next<0)a.exhausted=true;
     }
   }
   return state;
