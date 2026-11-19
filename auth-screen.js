@@ -41,7 +41,7 @@ export class AuthScreen {
     document.querySelector('#auth-title')?.focus({preventScroll:true});
   }
 
-  mount(app, dark, {ready, recovery}) {
+  mount(app, dark, {ready, unavailable, recovery}) {
     const view = recovery ? 'recovery' : this.view;
     if (this.root?.parentElement === app && this.root.dataset.view === view &&
         this.root.dataset.ready === String(ready)) {
@@ -52,7 +52,8 @@ export class AuthScreen {
     const tabs = this.emailsEnabled && (view === 'login' || view === 'signup');
     const hasPassword = ['login', 'signup', 'recovery'].includes(view);
     const newPassword = view === 'signup' || view === 'recovery';
-    const status = this.message || (!ready ? 'Подключаем авторизацию…' : '');
+    const status = unavailable ? 'Не удалось подключить вход. Проверьте интернет и повторите попытку.'
+      : this.message || (!ready ? 'Подключаем авторизацию…' : '');
     app.innerHTML = `<div class="auth-screen" data-view="${view}" data-ready="${ready}">
       <header class="auth-top">
         <div class="auth-brand"><img src="./icon.svg" alt="" width="38" height="38"><span>lexicon<span class="auth-dot">.</span></span></div>
@@ -91,6 +92,7 @@ export class AuthScreen {
           ${!tabs && view !== 'recovery' ? '<button type="button" class="auth-secondary" data-auth="login">Вернуться ко входу</button>' : ''}
           ${view === 'recovery' ? '<button type="button" class="auth-secondary" data-auth="leave-recovery">Выйти</button>' : ''}
           <p class="auth-status" role="status" ${status ? '' : 'hidden'}>${esc(status)}</p>
+          ${unavailable ? '<button type="button" class="auth-secondary" data-auth="retry">Повторить подключение</button>' : ''}
           ${view === 'login' || view === 'signup' ? '<div class="auth-guest"><button type="button" class="auth-link" data-auth="guest">Продолжить без аккаунта</button><p>Прогресс сохранится в этом браузере.</p></div>' : ''}
         </section>
       </main>
@@ -114,6 +116,7 @@ export class AuthScreen {
     const button = event.target.closest('[data-auth]');
     if (!button || this.busy) return;
     const action = button.dataset.auth;
+    if (action === 'retry') return location.reload();
     if (action === 'theme') return this.toggleTheme();
     if (action === 'guest') return this.continueAsGuest();
     if (action === 'resend' || action === 'leave-recovery') return this.request(action);

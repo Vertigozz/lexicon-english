@@ -7,9 +7,9 @@ import {starter} from './data/seed.js';
 import {stampState,mergeStates} from './sync-state.js';
 import {mergeSavedState} from './session-draft.js';
 import {setWordKnown,reconcileKnownSession,sessionScores} from './known.js';
-import {CloudSync,configured} from './cloud.js?v=33';
+import {CloudSync,configured} from './cloud.js?v=34';
 import {accountPanel,statusText} from './account-panel.js?v=33';
-import {AuthScreen} from './auth-screen.js?v=33';
+import {AuthScreen} from './auth-screen.js?v=34';
 import {CATALOG_ID,CATALOG_URL,installCatalog,finishPendingCatalogActivation} from './catalog.js';
 import {copy,contextSources,courseSourcesHTML} from './credits.js';
 import {cloudConfig} from './cloud-config.js';
@@ -174,8 +174,9 @@ const recoveryKey = 'lexicon-recovering-user';
 let guestMode = authSession.read(guestKey) === '1';
 let recoveryUser = authSession.read(recoveryKey);
 let authReady = false;
+let authStartupFailed = false;
 const authScreen = new AuthScreen({
-  client: () => cloud?.client ? cloud : null,
+  client: () => cloud?.client && !authStartupFailed ? cloud : null,
   emailsEnabled: cloudConfig.emailsConfigured,
   refresh: render,
   continueAsGuest() {
@@ -262,14 +263,21 @@ async function startCloud(){
         favorites=new Favorites(cloud.client,user);
         if(user)refreshFavorites();
       }
-      if(cloud?.client){sharedDecks=new SharedDecks(cloud.client);await refreshDecks(false);}cloudStatus.at=null;cloudStatus.error='';
+      if(cloud?.client)sharedDecks=new SharedDecks(cloud.client);
+      cloudStatus.at=null;cloudStatus.error='';
       const guest=await readState('guest');guestAvailable=Boolean(guest?.events.some(e=>['attempt','session_completed'].includes(e.type))||guest?.session);
       closeModal();render();
+      if(user)refreshDecks();
     }
   });
-  try{await cloud.start();}catch(error){cloudStatus.mode='error';cloudStatus.error='Не удалось подключить аккаунт. Локальные результаты сохранены. '+error.message;paintCloudStatus();}
+  try{await cloud.start();}catch{
+    authStartupFailed=true;
+    cloudStatus.mode='error';cloudStatus.error='Не удалось подключить аккаунт. Локальные результаты сохранены.';
+    console.warn('Lexicon: authorization initialization failed');
+    paintCloudStatus();
+  }
   authReady=true;
-  if(emailConfirmed||emailLinkError||recoveryLink){
+  if(!authStartupFailed&&(emailConfirmed||emailLinkError||recoveryLink)){
     if(!accountUser)route='auth';
     history.replaceState(null,'',location.pathname+'#'+route);
     if(emailLinkError || (recoveryLink && recoveryUser!==accountUser?.id)){
@@ -557,7 +565,7 @@ function render(){
   if(recovering || (!accountUser && (!guestMode || route==='auth'))){
     if(speakingView)clearSpeaking();
     app.dataset.route='auth';
-    authScreen.mount(app,state.settings.theme==='dark',{ready:Boolean(cloud?.client),recovery:recovering});
+    authScreen.mount(app,state.settings.theme==='dark',{ready:Boolean(cloud?.client)&&!authStartupFailed,unavailable:authStartupFailed||!configured,recovery:recovering});
     return;
   }
   if(route==='speaking'&&speakingView&&speakingAccount===accountUser?.id){
@@ -739,6 +747,7 @@ async function init(){const idb=await openStorage();try{state=await readState();
   reconcileKnownSession(state);
   try{const draft=JSON.parse(localStorage.getItem('lexicon-draft')),a=state.session;if(a&&draft?.sessionId===a.id&&draft.index===a.index&&draft.taskId===a.tasks[a.index]?.attemptId&&draft.phase===a.phase&&!a.feedback)a.input=draft.input;}catch{}
   if(!state.sync)await save(false);
-  await startCloud();setInterval(()=>{if(!document.hidden&&accountUser)refreshDecks();},60000);if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  await startCloud();setInterval(()=>{if(!document.hidden&&accountUser)refreshDecks();},60000);
 }
 init().catch(err=>{console.error(err);$('#app').innerHTML='<div class="boot">Не удалось запустить приложение<span>Попробуйте перезагрузить страницу. Ваши данные не удалены.</span></div>';});

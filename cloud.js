@@ -3,6 +3,22 @@ import {mergeStates,packState,unpackState,stateSignature} from './sync-state.js'
 import {validateBackup} from './core.js';
 
 export const configured=Boolean(cloudConfig.url&&cloudConfig.publishableKey);
+const CLOUD_TIMEOUT=12000;
+
+function withDeadline(promise){
+  let timer;
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Cloud startup timed out')),CLOUD_TIMEOUT);});
+  return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
+}
+
+async function cloudFetch(input,options){
+  if(options?.signal)return fetch(input,options);
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),CLOUD_TIMEOUT);
+  try{return await fetch(input,{...options,signal:controller.signal});}
+  finally{clearTimeout(timer);}
+}
+
 export class CloudSync {
   constructor({catalog,read,write,changed,status,account,recovery}) {
     Object.assign(this,{catalog,read,write,changed,status,account,recovery});
@@ -18,23 +34,37 @@ export class CloudSync {
       lastRecoveryToken = session.access_token;
       this.recovery?.(session.user);
     };
-    const {createClient}=await import('./vendor/supabase.js');
+    const {createClient}=await withDeadline(import('./vendor/supabase.js?v=34'));
     this.client=createClient(cloudConfig.url,cloudConfig.publishableKey,{
-      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lexicon-cloud-auth-v1'}
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storageKey:'lexicon-cloud-auth-v1'},
+      global:{fetch:cloudFetch}
     });
-    this.client.auth.onAuthStateChange((event,session)=>{
+    let initialized=false;
+    const {data:{subscription}}=this.client.auth.onAuthStateChange((event,session)=>{
       if(event==='PASSWORD_RECOVERY')notifyRecovery(session);
+      if(!initialized)return;
       setTimeout(async()=>{try{await this.setUser(session?.user||null);}catch(e){this.status('error',null,e.message);}},0);
     });
-    const {data,error}=await this.client.auth.getSession();if(error)throw error;
-    if(recoveryToken && recoveryToken === data.session?.access_token)notifyRecovery(data.session);
-    await this.setUser(data.session?.user||null);
+    try{
+      const {data,error}=await withDeadline(this.client.auth.getSession());if(error)throw error;
+      if(recoveryToken && recoveryToken === data.session?.access_token)notifyRecovery(data.session);
+      initialized=true;
+      await this.setUser(data.session?.user||null);
+    }catch(error){
+      subscription.unsubscribe();
+      throw error;
+    }
     this.interval=setInterval(()=>{if(!document.hidden)this.sync();},15000);
   }
   async setUser(user){
     if((this.user?.id||null)===(user?.id||null)&&this.started)return this.accountTransition;
     this.started=true;this.generation++;this.user=user;this.dirty=false;this.lastSyncedUser=null;clearTimeout(this.timer);this.timer=null;
-    this.accountTransition=(async()=>{await this.account(user);if(user)await this.sync();else this.status('guest');})();
+    const generation=this.generation;
+    this.accountTransition=(async()=>{
+      await this.account(user);
+      if(generation!==this.generation)return;
+      if(user)this.sync();else this.status('guest');
+    })();
     return this.accountTransition;
   }
   async login(email,password){const {data,error}=await this.client.auth.signInWithPassword({email,password});if(error)throw error;await this.setUser(data.user);}
