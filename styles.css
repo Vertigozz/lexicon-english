@@ -179,14 +179,26 @@ a.btn { text-decoration: none; }
 .study-top .text-btn, .study-top > span, .study-top > .badge { font-size: .875rem; }
 .study-container, .result-container { width: min(100%, 45rem); margin-inline: auto; }
 .study-card-pager {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: .5rem;
-  margin-bottom: .75rem;
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  display: flex;
+  justify-content: space-between;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
 }
-.study-card-pager > span { text-align: center; color: var(--muted); font-size: .875rem; font-variant-numeric: tabular-nums; }
-[data-study-card] { touch-action: pan-y pinch-zoom; }
+.study-card-pager > .icon-btn {
+  pointer-events: auto;
+  width: var(--touch-size);
+  height: var(--touch-size);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--text);
+}
+.study-card-pager > .icon-btn:disabled { opacity: .36; }
+.study-card-pager .icon { width: 16px; height: 16px; }
+[data-study-card] { position: relative; touch-action: pan-y pinch-zoom; }
 .study-controls > .btn { margin-inline-start: auto; }
 [data-study-card][data-turn=forward] { --card-entry: 20px; }
 [data-study-card][data-turn=back] { --card-entry: -20px; }
@@ -206,11 +218,39 @@ a.btn { text-decoration: none; }
 .answer-input { min-height: 48px; font-size: 1.25rem; }
 .known-word-action small, .context-notice { font-size: .875rem; }
 .word-study, .exercise-card, .result-errors { padding: clamp(1rem, 3vw, 2rem); }
+[data-study-card].word-study, [data-study-card].exercise-card { padding-inline: calc(var(--touch-size) + .35rem); }
 .result-heading p, .result-container > .tiny, .result-scores .badge { font-size: .875rem; }
 .result-scores > section { min-width: min(100%, 9.5rem); padding: 1rem; }
 .result-scores > section > span { font-size: .875rem; }
 .result-scores em { font-size: 1rem; }
 .result-heading #result-save-state { margin-top: .5rem; }
+.word-journey { margin-block: 1.25rem; padding: clamp(1rem, 4vw, 1.75rem); }
+.word-journey h2 { margin: 0 0 .75rem; font-size: 1.25rem; }
+.journey-word-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin-bottom: 1.25rem; font-size: .875rem; }
+.journey-word-picker select { flex: 1; min-width: min(100%, 9rem); max-width: 100%; }
+.journey-steps { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); list-style: none; margin: 0; padding: 0; }
+.journey-steps li { position: relative; display: grid; justify-items: center; gap: .55rem; color: var(--muted); font-size: .75rem; text-align: center; }
+.journey-steps li:not(:first-child)::before { content: ''; position: absolute; inset-inline-end: 50%; width: 100%; top: 15px; height: 2px; background: var(--line); }
+.journey-steps li.is-done::before { background: var(--accent); }
+.journey-marker { z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--control-border); border-radius: 50%; background: var(--bg); }
+.journey-marker > span { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.journey-marker .icon { width: 16px; height: 16px; }
+.journey-steps li.is-done { color: var(--accent); font-weight: 650; }
+.journey-steps li.is-done .journey-marker { color: var(--bg); border-color: var(--accent); background: var(--accent); }
+.journey-steps li.just-passed .journey-marker { outline: 2px solid var(--accent); outline-offset: 3px; }
+.journey-next { margin: 1rem 0 0; font-size: .875rem; color: var(--text); }
+.journey-next time { font-weight: 700; }
+@media (prefers-reduced-motion: no-preference) {
+  .journey-animate .journey-marker { animation: journey-milestone 520ms ease-out; }
+  @keyframes journey-milestone {
+    0% { transform: scale(.85); }
+    40% { transform: scale(1.16); box-shadow: 0 0 0 7px color-mix(in srgb,var(--accent) 24%,transparent); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+  }
+}
+@media (max-width: 359px) {
+  .journey-steps li:first-child > span:nth-child(2) { overflow-wrap: anywhere; }
+}
 .modal { width: min(100%, 37rem); padding: clamp(1rem, 3vw, 1.5rem); }
 .modal.wide { width: min(100%, 52rem); }
 .modal-backdrop { overscroll-behavior: contain; }
@@ -383,7 +423,7 @@ a.btn { text-decoration: none; }
 .dictionary-ipa { font-size:1rem; color:var(--muted); margin:.35rem 0; overflow-wrap:anywhere; }
 
 .exercise-card.with-speech { position: relative; }
-.exercise-card .exercise-card-actions { position:absolute; top:calc(clamp(1rem, 3vw, 2rem) + var(--touch-size) + .75rem); right:clamp(1rem, 3vw, 2rem); }
+.exercise-card .exercise-card-actions { position:absolute; top:clamp(1rem, 3vw, 2rem); right:calc(var(--touch-size) + .35rem); }
 .exercise-card.with-speech .exercise-kicker {
   min-height:44px;
   display:flex;
