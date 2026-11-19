@@ -423,6 +423,13 @@ a.btn { text-decoration: none; }
 .favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
 .entry-action .favorite-bookmark { color:var(--accent); }
 .word-study .word-head h1 { min-width:0; overflow-wrap:anywhere; }
+@media (max-width: 767px) {
+  .word-study .word-head { gap: .5rem; }
+  .word-study .word-head h1 { flex: 1; }
+}
+@media (max-width: 374px) {
+  .word-study .word-head { margin-inline: -.875rem; }
+}
 .entry-action { position:relative; display:flex; }
 .entry-action > .icon-btn { width:var(--touch-size); }
 .entry-action .btn[aria-disabled="true"] { cursor:wait; opacity:.57; }

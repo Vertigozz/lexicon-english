@@ -736,6 +736,37 @@ function profilePage(){
   return heading('Профиль','Управляйте аккаунтом и облачным сохранением.')+
     accountPanel({configured,user:accountUser,status:cloudStatus,guestAvailable});
 }
+const mobileWordCard=matchMedia('(max-width: 767px)');
+function fitStudyWord(){
+  const heading=document.querySelector('.word-study .word-head h1');
+  if(!heading)return;
+  heading.style.removeProperty('font-size');
+  heading.style.removeProperty('white-space');
+  if(!mobileWordCard.matches||!heading.clientWidth)return;
+  const width=heading.getBoundingClientRect().width;
+  const size=parseFloat(getComputedStyle(heading).fontSize);
+  const minimum=Math.min(size,parseFloat(getComputedStyle(document.documentElement).fontSize)*.875);
+  const range=document.createRange();
+  range.selectNodeContents(heading);
+  heading.style.whiteSpace='nowrap';
+  const fits=()=>range.getBoundingClientRect().width<=width;
+  if(!fits()){
+    let low=minimum,high=size;
+    heading.style.fontSize=low+'px';
+    if(fits()){
+      while(high-low>.25){
+        const candidate=(low+high)/2;
+        heading.style.fontSize=candidate+'px';
+        if(fits())low=candidate;else high=candidate;
+      }
+      heading.style.fontSize=low+'px';
+      return;
+    }
+  }
+  heading.style.removeProperty('white-space');
+}
+window.addEventListener('resize',fitStudyWord);
+document.fonts?.addEventListener('loadingdone',fitStudyWord);
 function render(options={}){
   if(!authReady)return;
   document.documentElement.dataset.theme=state.settings.theme;
@@ -759,6 +790,7 @@ function render(options={}){
   app.dataset.route=route;
   const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,dictionary:externalDictionaryPage,favorites:favoritesPage,roadmap:roadmapPage,statistics:statisticsPage,profile:profilePage,settings:settingsPage,study:()=>studyPage(options),speaking:speakingPage};
   app.innerHTML=shell((['dictionary','favorites','profile','speaking'].includes(route)?'':deckBar())+(pages[route]||dashboard)());
+  if(route==='study')fitStudyWord();
   if(route==='speaking')mountSpeakingPage();
   if(options.focusAnswer!==false&&route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>{if(!studyMoving)$('#answer')?.focus();});
 }
