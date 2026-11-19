@@ -311,7 +311,8 @@ a.btn { text-decoration: none; }
 .favorite-entry-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
 .favorite-entry-header h2 { min-width:0; margin:.35rem 0 0; }
 .favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
-.favorite-entry-actions .favorite-bookmark { color:var(--accent); }
+.entry-action .favorite-bookmark { color:var(--accent); }
+.word-study .word-head h1 { min-width:0; overflow-wrap:anywhere; }
 .entry-action { position:relative; display:flex; }
 .entry-action > .icon-btn { width:var(--touch-size); }
 .entry-action .btn[aria-disabled="true"] { cursor:wait; opacity:.57; }
@@ -363,13 +364,17 @@ a.btn { text-decoration: none; }
 .dictionary-ipa { font-size:1rem; color:var(--muted); margin:.35rem 0; overflow-wrap:anywhere; }
 
 .exercise-card.with-speech { position: relative; }
-.exercise-card .exercise-speak { position:absolute; top:1rem; right:1rem; }
+.exercise-card .exercise-card-actions { position:absolute; top:1rem; right:1rem; }
 .exercise-card.with-speech .exercise-kicker {
   min-height:44px;
   display:flex;
   align-items:center;
   justify-content:center;
   padding-inline:44px;
+}
+.exercise-card.with-bookmark .exercise-kicker {
+  padding-inline-start:0;
+  padding-inline-end:calc(2 * var(--touch-size) + .75rem);
 }
 
 /* Speaking Tutor uses the shared Lexicon theme and stays out of the mobile tab bar. */

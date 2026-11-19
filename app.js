@@ -1,5 +1,5 @@
 import {lookupWord,sourceURL,WIKI_LICENSE} from './wiktionary.js?v=13';
-import {Favorites} from './favorites.js?v=25';
+import {Favorites,deckFavoriteEntry} from './favorites.js?v=37';
 import {SharedDecks,installSharedDecks} from './shared-decks.js';
 import {normalize,uid,localDate,addDays,checkAnswer,shuffle,makeEvent,appendEvent,derive,reviewQueue,nextModule,selectContext,validatePackage,mergePackage,validateBackup,learningTotals} from './core.js';
 import {openStorage,readState,writeState} from './storage.js';
@@ -34,12 +34,13 @@ function dictionaryNavigation(){
   return `<nav class="dictionary-navigation" aria-label="Разделы словаря">${[['vocabulary','Слова колоды'],['dictionary','Найти перевод'],['favorites','Избранное']].map(([path,title])=>`<a href="#${path}"${route===path?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
 }
 function sourceCredit(entry){
+  if(entry.source_revision===null)return `<p class="dictionary-source">Учебная колода · ${esc(entry.source_title)}</p>`;
   return `<p class="dictionary-source">Источник <a href="${esc(sourceURL(entry))}" target="_blank" rel="noopener noreferrer">Викисловарь · ${esc(entry.source_title)}</a> · <a href="${WIKI_LICENSE}" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></p>`;
 }
 function pronunciationHTML(entry){
   const variants=Array.isArray(entry.pronunciations)?entry.pronunciations.filter(v=>v&&typeof v.ipa==='string'&&v.ipa.length<=120).slice(0,4):[];
   return `<div class="dictionary-pronunciation">
-    ${variants.length?variants.map(v=>`<p class="dictionary-ipa" lang="en">[${esc(v.ipa)}]</p>`).join(''):`<p class="tiny">${entry.pronunciations===null||entry.pronunciations===undefined?'Транскрипция ещё не загружена.':'В статье нет транскрипции.'}</p>`}
+    ${variants.length?variants.map(v=>`<p class="dictionary-ipa" lang="en">[${esc(v.ipa)}]</p>`).join(''):`<p class="tiny">${entry.source_revision===null?'Транскрипция недоступна.':entry.pronunciations===null||entry.pronunciations===undefined?'Транскрипция ещё не загружена.':'В статье нет транскрипции.'}</p>`}
   </div>`;
 }
 function pronounceWord(word,language='en-GB'){
@@ -68,18 +69,21 @@ function speechButton(word,{id,className}={}){
   const button=btn(icon('sound'),action,'icon-btn',`type="button" ${target} aria-label="Озвучить ${esc(word)}"`);
   return entryAction(button,'Озвучить',className);
 }
-function dictionaryEntryHeader(entry,{saved,index,pending=false}={}){
+function bookmarkButton(entry,{saved,action,target,pending=false}){
+  if(!accountUser)return '';
   const hint=saved?'Удалить из избранного':'Добавить в избранное';
   const bookmarkIcon=`<svg class="icon" viewBox="0 0 24 24" fill="${saved?'currentColor':'none'}" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z"/></svg>`;
-  const target=index===undefined?`data-key="${esc(saved?.entry_key||'')}"`:`data-index="${index}"`;
   const label=`${hint}: ${entry.word} — ${entry.translation}`;
-  const bookmark=accountUser?btn(bookmarkIcon,index===undefined?'favorite-remove':'favorite-toggle',`icon-btn${saved?' favorite-bookmark':''}`,
-    `type="button" ${target} aria-label="${esc(label)}" ${pending?'aria-disabled="true"':''}`):'';
+  return entryAction(btn(bookmarkIcon,action,`icon-btn${saved?' favorite-bookmark':''}`,
+    `type="button" ${target} aria-label="${esc(label)}" ${pending?'aria-disabled="true"':''}`),hint);
+}
+function dictionaryEntryHeader(entry,{saved,index,pending=false}={}){
+  const target=index===undefined?`data-key="${esc(saved?.entry_key||'')}"`:`data-index="${index}"`;
   return `<div class="favorite-entry-header">
     <h2 lang="en" tabindex="-1">${esc(entry.word)}</h2>
     <div class="favorite-entry-actions">
       ${speechButton(entry.word)}
-      ${bookmark?entryAction(bookmark,hint):''}
+      ${bookmarkButton(entry,{saved,action:index===undefined?'favorite-remove':'favorite-toggle',target,pending})}
     </div>
   </div>`;
 }
@@ -116,7 +120,7 @@ function favoritesPage(){
       ${dictionaryEntryHeader(entry,{saved:entry,pending:favorites.pending.has(entry.entry_key)})}
       ${pronunciationHTML(entry)}<p>${esc(entry.translation)}</p>${sourceCredit(entry)}
       ${entry.pronunciations===null||entry.pronunciations===undefined?btn(favorites.pending.has(entry.entry_key)?'Загружаем…':'Загрузить транскрипцию','favorite-pronunciation','subtle',`data-key="${esc(entry.entry_key)}" ${favorites.pending.has(entry.entry_key)?'disabled':''}`):''}</article>`).join('')}
-      ${favorites.loaded&&!favorites.rows.length?'<div class="empty-state"><h2>Здесь будут сохранённые слова</h2><p>Найдите перевод и добавьте нужное значение.</p><a class="btn primary" href="#dictionary">Найти перевод</a></div>':''}
+      ${favorites.loaded&&!favorites.rows.length?'<div class="empty-state"><h2>Здесь будут сохранённые слова</h2><p>Добавляйте слова из поиска или карточек тренировки.</p><a class="btn primary" href="#dictionary">Найти перевод</a></div>':''}
       ${!favorites.loaded&&!favorites.error?'<p role="status">Загружаем избранное…</p>':''}`}
     </section>`;
 }
@@ -158,7 +162,31 @@ async function refreshFavorites(){
   await pending;
   if(target!==favorites)return;
   if(route==='favorites')render();
-  else paintDictionaryResults();
+  else{paintDictionaryResults();paintStudyBookmark();}
+}
+function currentBookmarkWord(){
+  const session=state?.session;
+  if(!session||session.exhausted||route!=='study')return null;
+  const task=session.tasks[session.index];
+  const id=session.phase==='study'?session.wordIds[session.studyIndex]:
+    session.feedback&&task?.type==='gaps'?task.wordId:null;
+  return id?deck().words.find(word=>word.id===id):null;
+}
+function studyBookmark(word){
+  if(!accountUser)return '';
+  const entry=deckFavoriteEntry(word,deck().deck.title),saved=savedTranslation(entry);
+  const pending=favorites.pending.has(saved?.entry_key||resultIdentity(entry));
+  return bookmarkButton(entry,{saved,pending,action:'study-favorite-toggle',target:`data-id="${esc(word.id)}"`});
+}
+function paintStudyBookmark(){
+  const slot=$('[data-study-bookmark]'),word=currentBookmarkWord();
+  if(!slot||!word)return;
+  const focused=slot.contains(document.activeElement);
+  slot.innerHTML=studyBookmark(word);
+  if(focused)slot.querySelector('button')?.focus({preventScroll:true});
+}
+function studyCardActions(word,{speech=true,bookmark=false}={}){
+  return `<div class="favorite-entry-actions">${speech?speechButton(word.word,{id:word.id}):''}${bookmark&&accountUser?`<span data-study-bookmark>${studyBookmark(word)}</span>`:''}</div>`;
 }
 const authHash=new URLSearchParams(location.hash.slice(1)),authQuery=new URLSearchParams(location.search);
 const emailLinkError=authHash.has('error_code')||authQuery.has('error_code');
@@ -514,11 +542,12 @@ function studyPage(){const a=state.session;if(!a)return `${heading('Время �
   if(a.phase==='result')return resultPage(a);
   if(a.exhausted)return `${heading('Все оставшиеся задания выполнены','Посмотрите результат занятия.')}<div class="empty-state neo">${btn('Посмотреть результат','complete-session','primary')}</div>`;
   const words=a.wordIds.map(id=>deck().words.find(w=>w.id===id));
-  if(a.phase==='study'){const w=words[a.studyIndex];return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${day(a.module)} · Знакомство со словами</span>${badge('Шаг 1 из 3','muted')}</div><div class="study-container">${exerciseProgress(a.studyIndex+1,words.length,'Слово')}<section class="neo word-study"><div class="word-label">СЛОВО ${String(a.studyIndex+1).padStart(2,'0')}</div><div class="word-head"><h1 lang="en">${esc(w.word)}</h1>${speechButton(w.word,{id:w.id})}</div><div class="ipa">${esc(w.ipa)}</div><p class="word-translation">${esc(w.translations.join('; '))}</p><div class="known-word-action">${btn(icon('check')+' Уже знаю','known-word','subtle',`data-id="${esc(w.id)}"`)}<small>Исключить из упражнений и повторений</small></div><div class="divider"></div><div class="word-examples">${w.examples.map(e=>`<div><p lang="en">${esc(e.en)}</p>${e.ru?`<span>${esc(e.ru)}</span>`:''}</div>`).join('')}</div>${w.collocations?.length?`<div class="tags">${w.collocations.map(x=>badge(esc(x),'muted')).join('')}</div>`:''}</section><div class="study-controls">${btn('Назад','previous-word','subtle',a.studyIndex===0?'disabled':'') }<span>Не спешите. Прочитайте примеры вслух.</span>${btn(a.studyIndex===words.length-1?'К проверке '+icon('arrow'):'Следующее слово '+icon('arrow'),'next-word','primary')}</div></div>`;}
+  if(a.phase==='study'){const w=words[a.studyIndex];return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${day(a.module)} · Знакомство со словами</span>${badge('Шаг 1 из 3','muted')}</div><div class="study-container">${exerciseProgress(a.studyIndex+1,words.length,'Слово')}<section class="neo word-study"><div class="word-label">СЛОВО ${String(a.studyIndex+1).padStart(2,'0')}</div><div class="word-head"><h1 lang="en">${esc(w.word)}</h1>${studyCardActions(w,{bookmark:true})}</div><div class="ipa">${esc(w.ipa)}</div><p class="word-translation">${esc(w.translations.join('; '))}</p><div class="known-word-action">${btn(icon('check')+' Уже знаю','known-word','subtle',`data-id="${esc(w.id)}"`)}<small>Исключить из упражнений и повторений</small></div><div class="divider"></div><div class="word-examples">${w.examples.map(e=>`<div><p lang="en">${esc(e.en)}</p>${e.ru?`<span>${esc(e.ru)}</span>`:''}</div>`).join('')}</div>${w.collocations?.length?`<div class="tags">${w.collocations.map(x=>badge(esc(x),'muted')).join('')}</div>`:''}</section><div class="study-controls">${btn('Назад','previous-word','subtle',a.studyIndex===0?'disabled':'') }<span>Не спешите. Прочитайте примеры вслух.</span>${btn(a.studyIndex===words.length-1?'К проверке '+icon('arrow'):'Следующее слово '+icon('arrow'),'next-word','primary')}</div></div>`;}
   const t=a.tasks[a.index],w=deck().words.find(w=>w.id===t.wordId),c=t.type==='gaps'?w.clozeItems.find(c=>c.id===t.exerciseId):null,phaseTasks=a.tasks.filter(x=>x.type===t.type),ix=a.tasks.slice(0,a.index).filter(x=>x.type===t.type).length;
   if(c&&!state.events.some(e=>e.type==='context_shown'&&e.sessionId===a.id&&e.exerciseId===c.id)){log('context_shown',{sessionId:a.id,exerciseId:c.id,wordId:w.id});save();}
   const allowsPronunciation = a.kind === 'initial' || a.kind === 'review' || a.kind === 'difficult';
-  return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${a.kind==='difficult'?'Сложные слова':a.kind==='final'?'Итоговая проверка':day(a.module)} · ${phaseLabel(t.type)}</span>${badge(a.kind==='initial'?(t.type==='recall'?'Шаг 2 из 3':'Шаг 3 из 3'):a.kind==='review'?'Повторение R'+a.stage:'Дополнительная практика','muted')}</div><div class="study-container">${exerciseProgress(ix+1,phaseTasks.length,'Вопрос')}<section class="neo exercise-card ${allowsPronunciation?'with-speech':''}">${allowsPronunciation&&a.feedback?speechButton(w.word,{id:w.id,className:'exercise-speak'}):''}<div class="exercise-kicker">${t.type==='gaps'?'ВОССТАНОВИТЕ СЛОВО В КОНТЕКСТЕ':t.type==='enru'?'ВСПОМНИТЕ РУССКОЕ ЗНАЧЕНИЕ':'ВСПОМНИТЕ АНГЛИЙСКОЕ СЛОВО'}</div>${t.reused?'<div class="context-notice">Новые контексты закончились: это предложение уже встречалось. Добавьте упражнения через импорт.</div>':''}<h1 class="exercise-question ${t.type==='gaps'?'cloze-question':''}" lang="${t.type==='recall'?'ru':'en'}">${c?esc(c.en).replace('{{gap}}','<span class="gap">_____</span>'):esc(t.type==='enru'?w.word:w.recallPrompt||w.translations.join('; '))}</h1>${c?`<p class="exercise-translation">${esc(c.ru)}</p>`:'<p class="exercise-translation">'+(t.type==='enru'?'Введите одно из русских значений':'Без подсказок. Только вы и ваша память.')+'</p>'}<form id="answer-form" aria-label="Ответ на вопрос ${ix+1}"><label for="answer" class="sr-only">${t.type==='enru'?'Русский перевод':'Английское слово'}</label><input id="answer" data-session-id="${esc(a.id)}" data-task-index="${a.index}" data-task-id="${esc(t.attemptId)}" data-phase="${esc(a.phase)}" class="neo-input answer-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" lang="${t.type==='enru'?'ru':'en'}" placeholder="${t.type==='enru'?'Введите перевод…':'Введите английское слово…'}" value="${esc(a.input)}" ${a.feedback?'disabled':''} aria-describedby="answer-help"><div id="answer-help" class="input-hint">${a.feedback?'':t.type==='gaps'?'Введите только пропущенное слово':'Регистр и пробелы по краям не учитываются'}</div>${a.feedback?feedbackHTML(a,w,c):btn('Проверить '+icon('arrow'),'check','primary full','type="submit"')}</form>${a.kind!=='final'&&!a.feedback?`<div class="known-word-action">${btn('Уже знаю это слово','known-word','text-btn',`data-id="${esc(w.id)}" type="button"`)}</div>`:''}</section><div class="exercise-foot">${icon('lock')} Ответ сохраняется автоматически <span>Enter — ${a.feedback?(a.index===a.tasks.length-1?'посмотреть результат':'продолжить'):'проверить'}</span></div></div>`;
+  const showBookmark=t.type==='gaps'&&Boolean(a.feedback);
+  return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${a.kind==='difficult'?'Сложные слова':a.kind==='final'?'Итоговая проверка':day(a.module)} · ${phaseLabel(t.type)}</span>${badge(a.kind==='initial'?(t.type==='recall'?'Шаг 2 из 3':'Шаг 3 из 3'):a.kind==='review'?'Повторение R'+a.stage:'Дополнительная практика','muted')}</div><div class="study-container">${exerciseProgress(ix+1,phaseTasks.length,'Вопрос')}<section class="neo exercise-card ${allowsPronunciation||showBookmark?'with-speech':''} ${showBookmark&&accountUser?'with-bookmark':''}">${a.feedback&&(allowsPronunciation||showBookmark)?`<div class="exercise-card-actions">${studyCardActions(w,{speech:allowsPronunciation,bookmark:showBookmark})}</div>`:''}<div class="exercise-kicker">${t.type==='gaps'?'ВОССТАНОВИТЕ СЛОВО В КОНТЕКСТЕ':t.type==='enru'?'ВСПОМНИТЕ РУССКОЕ ЗНАЧЕНИЕ':'ВСПОМНИТЕ АНГЛИЙСКОЕ СЛОВО'}</div>${t.reused?'<div class="context-notice">Новые контексты закончились: это предложение уже встречалось. Добавьте упражнения через импорт.</div>':''}<h1 class="exercise-question ${t.type==='gaps'?'cloze-question':''}" lang="${t.type==='recall'?'ru':'en'}">${c?esc(c.en).replace('{{gap}}','<span class="gap">_____</span>'):esc(t.type==='enru'?w.word:w.recallPrompt||w.translations.join('; '))}</h1>${c?`<p class="exercise-translation">${esc(c.ru)}</p>`:'<p class="exercise-translation">'+(t.type==='enru'?'Введите одно из русских значений':'Без подсказок. Только вы и ваша память.')+'</p>'}<form id="answer-form" aria-label="Ответ на вопрос ${ix+1}"><label for="answer" class="sr-only">${t.type==='enru'?'Русский перевод':'Английское слово'}</label><input id="answer" data-session-id="${esc(a.id)}" data-task-index="${a.index}" data-task-id="${esc(t.attemptId)}" data-phase="${esc(a.phase)}" class="neo-input answer-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" lang="${t.type==='enru'?'ru':'en'}" placeholder="${t.type==='enru'?'Введите перевод…':'Введите английское слово…'}" value="${esc(a.input)}" ${a.feedback?'disabled':''} aria-describedby="answer-help"><div id="answer-help" class="input-hint">${a.feedback?'':t.type==='gaps'?'Введите только пропущенное слово':'Регистр и пробелы по краям не учитываются'}</div>${a.feedback?feedbackHTML(a,w,c):btn('Проверить '+icon('arrow'),'check','primary full','type="submit"')}</form>${a.kind!=='final'&&!a.feedback?`<div class="known-word-action">${btn('Уже знаю это слово','known-word','text-btn',`data-id="${esc(w.id)}" type="button"`)}</div>`:''}</section><div class="exercise-foot">${icon('lock')} Ответ сохраняется автоматически <span>Enter — ${a.feedback?(a.index===a.tasks.length-1?'посмотреть результат':'продолжить'):'проверить'}</span></div></div>`;
 }
 function feedbackHTML(a,w,c){const f=a.feedback;return `<div class="answer-feedback ${f.correct?'correct':'incorrect'}" role="status"><div>${icon(f.correct?'check':'info')}<strong>${f.correct?'Верно!':f.typo?'Похоже на опечатку':'Пока не получилось'}</strong></div>${!f.correct?`<p>${f.typo?'Опечатка не засчитывается. ':''}Правильный ответ: <strong lang="en">${esc(f.accepted.join(' / '))}</strong></p>`:''}${c?`<p lang="en">${esc(c.en.replace('{{gap}}',c.acceptedAnswers[0]))}</p><span>${esc(c.ru)}</span>`:`<p>${esc(w.word)} — ${esc(w.translations.join('; '))}</p>`}</div>${btn(a.index===a.tasks.length-1?'Посмотреть результат '+icon('arrow'):'Продолжить '+icon('arrow'),'next-question','primary full','type="button"')}`;}
 async function checkCurrent(){const a=state.session;if(!a||a.feedback||a.phase==='result'||a.phase==='study')return;const answer=$('#answer')?.value??a.input;if(!normalize(answer)){toast('Введите ответ или «—», если пока не помните слово.');$('#answer')?.focus();return;}const t=a.tasks[a.index],w=deck().words.find(w=>w.id===t.wordId),c=t.type==='gaps'?w.clozeItems.find(c=>c.id===t.exerciseId):null,accepted=c?c.acceptedAnswers:t.type==='enru'?w.translations:[w.word,...(w.acceptedAnswers||[])];const result=checkAnswer(answer,accepted);const attempt={id:t.attemptId||`${a.id}:attempt:${a.index}`,type:'attempt',at:new Date().toISOString(),date:today(),deckId:state.activeDeckId,sessionId:a.id,wordId:w.id,exerciseId:c?.id||`${w.id}:${t.type}`,exerciseType:t.type,answer,...result};appendEvent(state,attempt);a.answers.push(attempt);a.input=answer;a.feedback={...result,accepted};await save();render();$('[data-action="next-question"]')?.focus();}
@@ -641,8 +670,10 @@ async function actions(action,el){
     }
     return;
   }
-  if(action==='favorite-toggle'){
-    const entry=dictionary.results[Number(el.dataset.index)];
+  if(action==='favorite-toggle'||action==='study-favorite-toggle'){
+    const word=action==='study-favorite-toggle'?currentBookmarkWord():null;
+    const entry=action==='favorite-toggle'?dictionary.results[Number(el.dataset.index)]:
+      word?.id===el.dataset.id?deckFavoriteEntry(word,deck().deck.title):null;
     if(!entry||!accountUser)return;
     const target=favorites,saved=savedTranslation(entry),key=saved?.entry_key||resultIdentity(entry);
     if(target.pending.has(key))return;
@@ -655,7 +686,7 @@ async function actions(action,el){
     }finally{
       target.pending.delete(key);
       if(target===favorites&&route==='favorites')render();
-      else if(target===favorites)paintDictionaryResults();
+      else if(target===favorites){paintDictionaryResults();paintStudyBookmark();}
     }
     return;
   }

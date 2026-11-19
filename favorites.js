@@ -1,3 +1,14 @@
+export function deckFavoriteEntry(word, deckTitle){
+  const ipa=word.ipa.trim().replace(/^\[(.*)\]$|^\/(.*)\/$/u,'$1$2').trim();
+  return {
+    word:word.word,
+    translation:word.translations.join('; '),
+    source_title:deckTitle.trim().slice(0,200),
+    source_revision:null,
+    pronunciations:ipa&&ipa.length<=120?[{ipa}]:[]
+  };
+}
+
 export async function favoriteKey(word,translation){
   const value=JSON.stringify([word.normalize('NFKC').toLowerCase().trim(),translation.normalize('NFKC').trim()]);
   const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
@@ -34,6 +45,7 @@ export class Favorites {
   async add(entry){
     if(!this.user)throw new Error('Войдите в аккаунт, чтобы сохранить слово.');
     if(!navigator.onLine)throw new Error('Для сохранения в избранное подключитесь к интернету.');
+    if(entry.word.length>80||entry.translation.length>800)throw new Error('Слово или перевод слишком длинные для избранного.');
     const entry_key=await favoriteKey(entry.word,entry.translation);
     const row={...entry,entry_key,user_id:this.user.id};
     const {error}=await this.client.from('lexicon_favorites').upsert(row,{onConflict:'user_id,entry_key',ignoreDuplicates:true}).abortSignal(AbortSignal.timeout(30000));
