@@ -228,16 +228,37 @@ a.btn { text-decoration: none; }
   -webkit-box-decoration-break: clone;
 }
 .recall-solution { font-weight: 500; }
-.answer-status { display: grid; place-items: center; margin: .5rem 0 1rem; }
+.answer-status {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  margin: .75rem 0 1.125rem;
+  text-align: center;
+}
 .answer-success { color: var(--green); }
 .answer-error { color: var(--red); }
-.answer-mark { width: 40px; height: 40px; }
+.answer-mark {
+  display: block;
+  width: clamp(52px, 9vw, 60px);
+  height: auto;
+  aspect-ratio: 1;
+  overflow: visible;
+}
 .answer-correction { margin: .5rem 0 0; color: var(--text); }
 @media (prefers-reduced-motion: no-preference) {
   .gap-reveal { animation: gap-reveal 560ms ease-out; }
-  .answer-mark-reveal path { stroke-dasharray: 1; animation: answer-mark-draw 420ms ease-out both; }
-  .answer-cross.answer-mark-reveal path { animation-duration: 260ms; }
-  .answer-cross.answer-mark-reveal path + path { animation-delay: 120ms; }
+  .answer-mark-reveal { animation: answer-mark-pop 640ms cubic-bezier(.2,.7,.25,1) both; }
+  .answer-mark-reveal path { stroke-dasharray: 1; animation: answer-mark-draw 480ms ease-out both; }
+  .answer-cross.answer-mark-reveal path { animation-duration: 340ms; }
+  .answer-cross.answer-mark-reveal path + path { animation-delay: 155ms; }
+  @keyframes answer-mark-pop {
+    0% { transform: scale(.62); opacity: 0; }
+    20% { opacity: 1; }
+    66% { transform: scale(1.14); }
+    84% { transform: scale(.97); }
+    100% { transform: scale(1); opacity: 1; }
+  }
   @keyframes answer-mark-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
   @keyframes gap-reveal {
     from { color: transparent; background: transparent; }
