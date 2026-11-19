@@ -258,8 +258,6 @@ a.btn { text-decoration: none; }
 .result-heading #result-save-state { margin-top: .5rem; }
 .word-journey { margin-block: 1.25rem; padding: clamp(1rem, 4vw, 1.75rem); }
 .word-journey h2 { margin: 0 0 .75rem; font-size: 1.25rem; }
-.journey-word-picker { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; margin-bottom: 1.25rem; font-size: .875rem; }
-.journey-word-picker select { flex: 1; min-width: min(100%, 9rem); max-width: 100%; }
 .journey-steps { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); list-style: none; margin: 0; padding: 0; }
 .journey-steps li { position: relative; display: grid; justify-items: center; gap: .55rem; color: var(--muted); font-size: .75rem; text-align: center; }
 .journey-steps li:not(:first-child)::before { content: ''; position: absolute; inset-inline-end: 50%; width: 100%; top: 15px; height: 2px; background: var(--line); }
