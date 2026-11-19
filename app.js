@@ -164,12 +164,15 @@ async function refreshFavorites(){
   if(route==='favorites')render();
   else{paintDictionaryResults();paintStudyBookmark();}
 }
+function canBookmarkAnsweredTask(session,task){
+  return Boolean(session.feedback&&(task?.type==='recall'||task?.type==='gaps'));
+}
 function currentBookmarkWord(){
   const session=state?.session;
   if(!session||session.exhausted||route!=='study')return null;
   const task=session.tasks[session.index];
   const id=session.phase==='study'?session.wordIds[session.studyIndex]:
-    session.feedback&&task?.type==='gaps'?task.wordId:null;
+    canBookmarkAnsweredTask(session,task)?task.wordId:null;
   return id?deck().words.find(word=>word.id===id):null;
 }
 function studyBookmark(word){
@@ -546,7 +549,7 @@ function studyPage(){const a=state.session;if(!a)return `${heading('Время �
   const t=a.tasks[a.index],w=deck().words.find(w=>w.id===t.wordId),c=t.type==='gaps'?w.clozeItems.find(c=>c.id===t.exerciseId):null,phaseTasks=a.tasks.filter(x=>x.type===t.type),ix=a.tasks.slice(0,a.index).filter(x=>x.type===t.type).length;
   if(c&&!state.events.some(e=>e.type==='context_shown'&&e.sessionId===a.id&&e.exerciseId===c.id)){log('context_shown',{sessionId:a.id,exerciseId:c.id,wordId:w.id});save();}
   const allowsPronunciation = a.kind === 'initial' || a.kind === 'review' || a.kind === 'difficult';
-  const showBookmark=t.type==='gaps'&&Boolean(a.feedback);
+  const showBookmark=canBookmarkAnsweredTask(a,t);
   return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${a.kind==='difficult'?'Сложные слова':a.kind==='final'?'Итоговая проверка':day(a.module)} · ${phaseLabel(t.type)}</span>${badge(a.kind==='initial'?(t.type==='recall'?'Шаг 2 из 3':'Шаг 3 из 3'):a.kind==='review'?'Повторение R'+a.stage:'Дополнительная практика','muted')}</div><div class="study-container">${exerciseProgress(ix+1,phaseTasks.length,'Вопрос')}<section class="neo exercise-card ${allowsPronunciation||showBookmark?'with-speech':''} ${showBookmark&&accountUser?'with-bookmark':''}">${a.feedback&&(allowsPronunciation||showBookmark)?`<div class="exercise-card-actions">${studyCardActions(w,{speech:allowsPronunciation,bookmark:showBookmark})}</div>`:''}<div class="exercise-kicker">${t.type==='gaps'?'ВОССТАНОВИТЕ СЛОВО В КОНТЕКСТЕ':t.type==='enru'?'ВСПОМНИТЕ РУССКОЕ ЗНАЧЕНИЕ':'ВСПОМНИТЕ АНГЛИЙСКОЕ СЛОВО'}</div>${t.reused?'<div class="context-notice">Новые контексты закончились: это предложение уже встречалось. Добавьте упражнения через импорт.</div>':''}<h1 class="exercise-question ${t.type==='gaps'?'cloze-question':''}" lang="${t.type==='recall'?'ru':'en'}">${c?esc(c.en).replace('{{gap}}','<span class="gap">_____</span>'):esc(t.type==='enru'?w.word:w.recallPrompt||w.translations.join('; '))}</h1>${c?`<p class="exercise-translation">${esc(c.ru)}</p>`:'<p class="exercise-translation">'+(t.type==='enru'?'Введите одно из русских значений':'Без подсказок. Только вы и ваша память.')+'</p>'}<form id="answer-form" aria-label="Ответ на вопрос ${ix+1}"><label for="answer" class="sr-only">${t.type==='enru'?'Русский перевод':'Английское слово'}</label><input id="answer" data-session-id="${esc(a.id)}" data-task-index="${a.index}" data-task-id="${esc(t.attemptId)}" data-phase="${esc(a.phase)}" class="neo-input answer-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" lang="${t.type==='enru'?'ru':'en'}" placeholder="${t.type==='enru'?'Введите перевод…':'Введите английское слово…'}" value="${esc(a.input)}" ${a.feedback?'disabled':''} aria-describedby="answer-help"><div id="answer-help" class="input-hint">${a.feedback?'':t.type==='gaps'?'Введите только пропущенное слово':'Регистр и пробелы по краям не учитываются'}</div>${a.feedback?feedbackHTML(a,w,c):btn('Проверить '+icon('arrow'),'check','primary full','type="submit"')}</form>${a.kind!=='final'&&!a.feedback?`<div class="known-word-action">${btn('Уже знаю это слово','known-word','text-btn',`data-id="${esc(w.id)}" type="button"`)}</div>`:''}</section><div class="exercise-foot">${icon('lock')} Ответ сохраняется автоматически <span>Enter — ${a.feedback?(a.index===a.tasks.length-1?'посмотреть результат':'продолжить'):'проверить'}</span></div></div>`;
 }
 function feedbackHTML(a,w,c){const f=a.feedback;return `<div class="answer-feedback ${f.correct?'correct':'incorrect'}" role="status"><div>${icon(f.correct?'check':'info')}<strong>${f.correct?'Верно!':f.typo?'Похоже на опечатку':'Пока не получилось'}</strong></div>${!f.correct?`<p>${f.typo?'Опечатка не засчитывается. ':''}Правильный ответ: <strong lang="en">${esc(f.accepted.join(' / '))}</strong></p>`:''}${c?`<p lang="en">${esc(c.en.replace('{{gap}}',c.acceptedAnswers[0]))}</p><span>${esc(c.ru)}</span>`:`<p>${esc(w.word)} — ${esc(w.translations.join('; '))}</p>`}</div>${btn(a.index===a.tasks.length-1?'Посмотреть результат '+icon('arrow'):'Продолжить '+icon('arrow'),'next-question','primary full','type="button"')}`;}
