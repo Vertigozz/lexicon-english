@@ -423,20 +423,6 @@ a.btn { text-decoration: none; }
 .favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
 .entry-action .favorite-bookmark { color:var(--accent); }
 .word-study .word-head h1 { min-width:0; overflow-wrap:anywhere; }
-@media (max-width: 767px) {
-  .study-word-title {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto 1fr;
-    align-items: start;
-    column-gap: .5rem;
-    margin-inline: -1.5rem;
-  }
-  .study-word-title .word-head { display: contents; }
-  .study-word-title h1 { grid-area: 1 / 1; font-size: clamp(1.625rem, 7.5vw, 2.1875rem); }
-  .study-word-title .ipa { grid-area: 2 / 1; overflow-wrap: anywhere; }
-  .study-word-title .favorite-entry-actions { grid-area: 1 / 2 / 3; flex-direction: column; }
-}
 .entry-action { position:relative; display:flex; }
 .entry-action > .icon-btn { width:var(--touch-size); }
 .entry-action .btn[aria-disabled="true"] { cursor:wait; opacity:.57; }
