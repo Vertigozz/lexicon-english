@@ -423,6 +423,21 @@ a.btn { text-decoration: none; }
 .favorite-entry-actions { display:flex; flex:none; gap:.5rem; }
 .entry-action .favorite-bookmark { color:var(--accent); }
 .word-study .word-head h1 { min-width:0; overflow-wrap:anywhere; }
+@media (max-width: 767px) {
+  .word-study .word-label {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch-size);
+    margin-bottom: .5rem;
+  }
+  .word-study .word-head { display: block; }
+  .word-study .word-head h1 { font-size: clamp(1.625rem, 8.125vw, 2.1875rem); }
+  .word-study .word-head > .favorite-entry-actions {
+    position: absolute;
+    inset-block-start: clamp(1rem, 3vw, 2rem);
+    inset-inline-end: calc(var(--touch-size) + .35rem);
+  }
+}
 .entry-action { position:relative; display:flex; }
 .entry-action > .icon-btn { width:var(--touch-size); }
 .entry-action .btn[aria-disabled="true"] { cursor:wait; opacity:.57; }
