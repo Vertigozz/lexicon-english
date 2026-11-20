@@ -8,8 +8,8 @@ import {stampState,mergeStates} from './sync-state.js';
 import {mergeSavedState} from './session-draft.js';
 import {setWordKnown,reconcileKnownSession,sessionScores} from './known.js';
 import {practiceAnswers,rememberPracticeDraft,selectPracticeTask,nextUnansweredTask} from './study-navigation.js?v=40';
-import {CloudSync,configured} from './cloud.js?v=34';
-import {accountPanel,statusText} from './account-panel.js?v=33';
+import {CloudSync,configured} from './cloud.js?v=52';
+import {accountPanel,statusText,cloudTimeText} from './account-panel.js?v=52';
 import {AuthScreen} from './auth-screen.js?v=34';
 import {CATALOG_ID,CATALOG_URL,installCatalog,finishPendingCatalogActivation} from './catalog.js';
 import {copy,contextSources,courseSourcesHTML} from './credits.js';
@@ -241,7 +241,8 @@ function paintCloudStatus(){
   const label=statusText(cloudStatus,accountUser);if($('#save-state'))$('#save-state').textContent=label;
   if($('#result-save-state'))$('#result-save-state').textContent=label;
   document.querySelectorAll('[data-cloud-detail]').forEach(el=>el.textContent=label);
-  document.querySelectorAll('[data-cloud-time]').forEach(el=>el.textContent=cloudStatus.at?'Последняя синхронизация: '+new Date(cloudStatus.at).toLocaleString('ru'):'');
+  document.querySelectorAll('[data-cloud-time]').forEach(el=>el.textContent=cloudTimeText('Облачная копия обновлена',cloudStatus.at));
+  document.querySelectorAll('[data-cloud-checked]').forEach(el=>el.textContent=cloudTimeText('Последняя ручная синхронизация',cloudStatus.checkedAt));
   document.querySelectorAll('[data-cloud-error]').forEach(el=>{el.hidden=cloudStatus.mode!=='error';el.textContent=cloudStatus.error;});
 }
 function applySaved(saved){
@@ -296,7 +297,7 @@ async function startCloud(){
         if(user)refreshFavorites();
       }
       if(cloud?.client)sharedDecks=new SharedDecks(cloud.client);
-      cloudStatus.at=null;cloudStatus.error='';
+      cloudStatus.at=null;cloudStatus.checkedAt=null;cloudStatus.error='';
       const guest=await readState('guest');guestAvailable=Boolean(guest?.events.some(e=>['attempt','session_completed'].includes(e.type))||guest?.session);
       closeModal();render();
       if(user)refreshDecks();
@@ -371,7 +372,15 @@ async function cloudAction(action,button){
   if(action==='cloud-password'){showPasswordReset();return;}
   if(button)button.disabled=true;
   try{
-    if(action==='cloud-sync'){if(await save(false))await cloud.sync(true);}
+    if(action==='cloud-sync'){
+      const userId=accountUser?.id;
+      authMessage('');
+      if(await save(false)&&accountUser?.id===userId&&await cloud.sync(true)&&accountUser?.id===userId){
+        cloudStatus.checkedAt=new Date().toISOString();
+        paintCloudStatus();
+        authMessage('Синхронизация завершена.');
+      }
+    }
     if(action==='cloud-logout'){if(await save(false)){await cloud.logout();toast('Вы вышли. Облачный прогресс сохранён в аккаунте.');}}
     if(action==='cloud-import-guest'){
       const guest=await readState('guest');if(!guest||!accountUser)return;

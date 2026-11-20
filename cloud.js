@@ -88,7 +88,7 @@ export class CloudSync {
     const version=this.changeVersion;
     const promise=(async()=>{
       if(generation!==this.generation)return;
-      if(!navigator.onLine){this.status('offline');if(strict)throw new Error('Для выхода подключитесь к интернету и синхронизируйте прогресс.');return;}
+      if(!navigator.onLine){this.status('offline');if(strict)throw new Error('Подключитесь к интернету и повторите синхронизацию.');return;}
       if(strict||this.dirty||this.lastSyncedUser!==user.id)this.status('syncing');
       try {
         for(let attempt=0;attempt<6;attempt++){
@@ -112,7 +112,7 @@ export class CloudSync {
           if(needsMerge)await this.changed(saved);
           if(stateSignature(packState(saved,this.catalog()))!==stateSignature(document))continue;
           if(version===this.changeVersion)this.dirty=false;
-          this.lastSyncedUser=user.id;this.status(this.dirty?'pending':'synced',savedAt);return;
+          this.lastSyncedUser=user.id;this.status(this.dirty?'pending':'synced',savedAt);return !this.dirty;
         }
         throw new Error('Другой сеанс активно меняет данные. Повторим синхронизацию автоматически.');
       }catch(error){this.status('error',null,error.message);if(strict)throw error;}
