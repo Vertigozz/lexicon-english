@@ -28,8 +28,8 @@ const btn=(label,action,cls='',extra='')=>`<button class="btn ${cls}" data-actio
 const badge=(text,type='')=>`<span class="badge ${type}">${text}</span>`;
 let sharedDecks,catalogError='',catalogRefreshing=false;
 let favorites=new Favorites(null,null);
-const dictionary={query:'',searched:'',status:'idle',results:[],error:''};
-let dictionaryRequest;
+const newDictionarySearch=()=>({query:'',status:'idle',results:[],error:'',request:null});
+const dictionary=newDictionarySearch(),overlayDictionary=newDictionarySearch();
 const dictionaryRoutes=['vocabulary','dictionary','favorites'];
 function dictionaryNavigation(){
   return `<nav class="dictionary-navigation" aria-label="Разделы словаря">${[['vocabulary','Слова колоды'],['dictionary','Найти перевод'],['favorites','Избранное']].map(([path,title])=>`<a href="#${path}"${route===path?' aria-current="page"':''}>${title}</a>`).join('')}</nav>`;
@@ -88,7 +88,7 @@ function dictionaryEntryHeader(entry,{saved,index,pending=false}={}){
     </div>
   </div>`;
 }
-function dictionaryResults(){
+function dictionaryResults(dictionary){
   if(dictionary.status==='loading')return '<p role="status">Ищем в Викисловаре…</p>';
   if(dictionary.status==='error')return `<p role="status">${esc(dictionary.error)}</p>`;
   if(dictionary.status==='empty')return '<p role="status">В английском разделе Викисловаря не найдено подходящих русских значений. Попробуйте начальную форму слова или другое написание.</p>';
@@ -103,13 +103,26 @@ function dictionaryResults(){
       </article>`;
     }).join('')}`;
 }
+function dictionarySearchForm(id,query,{compact=false}={}){
+  return `<form id="${id}" class="${compact?'global-dictionary-search':''}" role="search" aria-label="${compact?'Быстрый поиск перевода':'Поиск в Викисловаре'}">
+    <label class="${compact?'sr-only':'field-label'}" for="${id}-query">${compact?'Найти перевод':'Английское слово'}</label>
+    <div class="dictionary-search"><input id="${id}-query" name="query" class="neo-input" type="search" lang="en" maxlength="80" required autocomplete="off" spellcheck="false" value="${esc(query)}" placeholder="${compact?'Найти перевод':'Например, bank'}"><button class="btn primary" type="submit">${compact?icon('search'):''} Найти перевод</button></div>
+    ${compact?'':'<p class="tiny">Текст запроса отправляется в Викисловарь. Каждое значение можно сохранить отдельно.</p>'}
+  </form>`;
+}
+function dictionaryPanel(id,search){
+  return dictionarySearchForm(id,search.query)+`<div class="dictionary-results" data-dictionary-results="${id}" aria-busy="${search.status==='loading'}">${dictionaryResults(search)}</div>`;
+}
 function externalDictionaryPage(){
   return `${heading('Найти перевод','Английские слова и выражения из Викисловаря.')}${dictionaryNavigation()}
-    <section class="neo dictionary-panel"><form id="dictionary-search-form">
-      <label class="field-label" for="dictionary-query">Английское слово</label>
-      <div class="dictionary-search"><input id="dictionary-query" class="neo-input" type="search" lang="en" maxlength="80" required autocomplete="off" spellcheck="false" value="${esc(dictionary.query)}" placeholder="Например, bank"><button class="btn primary" type="submit">Найти перевод</button></div>
-      <p class="tiny">Текст запроса отправляется в Викисловарь. Каждое значение можно сохранить отдельно.</p>
-    </form><div id="dictionary-results" aria-busy="${dictionary.status==='loading'}">${dictionaryResults()}</div></section>`;
+    <section class="neo dictionary-panel">${dictionaryPanel('dictionary-search-form',dictionary)}</section>`;
+}
+let globalDictionaryQuery='';
+function openDictionaryOverlay(){
+  Object.assign(overlayDictionary,newDictionarySearch(),{query:globalDictionaryQuery,status:'loading'});
+  showModal('Найти перевод',`<div class="dictionary-panel dictionary-overlay">${dictionaryPanel('dictionary-overlay-form',overlayDictionary)}</div>`,true);
+  modalOpener=$('#global-dictionary-search-query');
+  searchDictionary(overlayDictionary,globalDictionaryQuery);
 }
 function favoritesPage(){
   return `${heading('Избранное','Личная коллекция слов и выбранных переводов.')}${dictionaryNavigation()}
@@ -126,35 +139,34 @@ function favoritesPage(){
     </section>`;
 }
 function paintDictionaryResults(){
-  const panel=$('#dictionary-results');
-  if(panel){
+  for(const panel of document.querySelectorAll('[data-dictionary-results]')){
+    const search=panel.closest('.dictionary-overlay')?overlayDictionary:dictionary;
     const active=document.activeElement;
-    const focused=active?.closest('.dictionary-entry')?.dataset.result;
+    const focused=panel.contains(active)?active.closest('.dictionary-entry')?.dataset.result:undefined;
     const control=active?.matches('[data-action="favorite-toggle"]')?'[data-action="favorite-toggle"]':
       active?.matches('[data-action="dictionary-speak"]')?'[data-action="dictionary-speak"]':'h2';
-    panel.innerHTML=dictionaryResults();panel.setAttribute('aria-busy',String(dictionary.status==='loading'));
+    panel.innerHTML=dictionaryResults(search);panel.setAttribute('aria-busy',String(search.status==='loading'));
     if(focused!==undefined)panel.querySelector(`[data-result="${focused}"] ${control}`)?.focus({preventScroll:true});
   }
 }
-async function searchDictionary(){
-  dictionaryRequest?.abort();
-  const controller=new AbortController();dictionaryRequest=controller;
-  dictionary.query=$('#dictionary-query').value;
-  dictionary.searched=dictionary.query;
+async function searchDictionary(dictionary,query){
+  dictionary.request?.abort();
+  const controller=new AbortController();dictionary.request=controller;
+  dictionary.query=query;
   dictionary.status='loading';dictionary.results=[];dictionary.error='';
   paintDictionaryResults();
   const timer=setTimeout(()=>controller.abort(),30000);
   try{
     const entries=await lookupWord(dictionary.query,{signal:controller.signal});
-    if(dictionaryRequest!==controller)return;
+    if(dictionary.request!==controller)return;
     dictionary.results=entries;dictionary.status=entries.length?'found':'empty';
   }catch(error){
-    if(dictionaryRequest!==controller)return;
+    if(dictionary.request!==controller)return;
     dictionary.error=controller.signal.aborted?'Викисловарь долго не отвечает. Повторите поиск.':error instanceof TypeError?'Не удалось подключиться к Викисловарю. Проверьте интернет и повторите поиск.':error.message;
     dictionary.status='error';
   }finally{
     clearTimeout(timer);
-    if(dictionaryRequest===controller)paintDictionaryResults();
+    if(dictionary.request===controller){dictionary.request=null;paintDictionaryResults();}
   }
 }
 async function refreshFavorites(){
@@ -163,7 +175,7 @@ async function refreshFavorites(){
   await pending;
   if(target!==favorites)return;
   if(route==='favorites')render();
-  else{paintDictionaryResults();paintStudyBookmark();}
+  paintDictionaryResults();paintStudyBookmark();
 }
 function canBookmarkAnsweredTask(session,task){
   return Boolean(session.feedback&&(task?.type==='recall'||task?.type==='gaps'));
@@ -350,21 +362,12 @@ function deckLabel(d){
 function deckOptions(){
   return state.decks.map(d=>`<option value="${esc(d.deck.id)}" ${d.deck.id===state.activeDeckId?'selected':''}>${esc(deckLabel(d))}</option>`).join('');
 }
-function deckBar(){
-  const active=state.session&&state.session.phase!=='result';
-  if(route==='study')return `<p class="study-deck">${esc(deckLabel(deck()))}</p>`;
-  return `<section class="deck-picker" aria-label="Активная колода">
-    <label for="catalog-deck-select">Колода</label>
-    <div class="deck-control">
-      <select id="catalog-deck-select" class="neo-select" ${active?'disabled':''}>${deckOptions()}</select>
-      <span class="active-deck-name" aria-hidden="true">${esc(deckLabel(deck()))}</span>
-    </div>
-    ${accountUser?`<details class="catalog-actions"><summary>Каталог</summary><div class="catalog-panel">
-      ${btn('Обновить каталог','refresh-decks','subtle small')}${sharedDecks?.admin?btn('Переименовать','rename-deck','subtle small'):''}
-    </div></details>`:'<a class="catalog-login" href="#auth">Войти в общий каталог</a>'}
-    ${active?'<small>Чтобы сменить колоду, завершите текущую тренировку.</small>':''}
+function deckCatalogControls(){
+  return `<div class="button-row">${accountUser?
+    btn('Обновить каталог','refresh-decks','subtle')+(sharedDecks?.admin?btn('Переименовать колоду','rename-deck','subtle'):''):
+    '<a class="btn subtle" href="#auth">Войти в общий каталог</a>'}</div>
     <small id="catalog-status" role="status" ${catalogError?'':'hidden'}>${esc(catalogError)}</small>
-  </section>`;
+  `;
 }
 function authMessage(message){const el=$('#auth-message');if(el)el.textContent=message;else toast(message);}
 async function cloudAction(action,button){
@@ -488,7 +491,7 @@ function statisticsPage(){
     ${Array.from({length:6},(_,i)=>{const n=s.ms.filter(m=>m.stage===i).length;return `<div class="stage-row"><span>${i?'R'+i:'Изучены'}</span><div class="inset track" aria-hidden="true"><i style="width:${n/Math.max(1,s.learned)*100}%"></i></div><strong>${formatCount(n)}</strong></div>`;}).join('')}
   </section></div><div class="stats-layout"><section class="neo"><div class="panel-title"><h2>История занятий</h2>${badge(s.p.sessions.length)}</div>${s.p.sessions.length?`<div class="session-list">${[...s.p.sessions].reverse().slice(0,15).map(e=>`<div class="session-row"><span>${icon(e.success?'check':'repeat')}</span><div><strong>${e.kind==='difficult'?'Сложные слова':e.kind==='final'?'Итоговая проверка':day(e.module)+' · '+(e.stage?'R'+e.stage:'Изучение')}</strong><small>${fmt(e.date,true)} · ${e.scores.recall}/${e.count||10} и ${e.scores.gaps}/${e.count||10}</small></div>${badge(e.success?'Пройдено':'Повторная попытка',e.success?'success':'warning')}</div>`).join('')}</div>`:'<div class="empty-state compact"><p>Ваша история начнётся с первого занятия.</p></div>'}</section><section class="neo"><h2>Слова, которым нужно внимание</h2>${Object.entries(errors).filter(([id])=>!s.p.known.has(id)).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,n])=>`<button class="hard-row" data-action="word" data-id="${esc(id)}"><strong>${esc(deck().words.find(w=>w.id===id)?.word||id)}</strong><span>${n} ошибок</span></button>`).join('')||'<div class="gentle-empty">'+icon('leaf')+'<p>Ошибок пока нет.<br>Здесь будет ваша личная зона роста.</p></div>'}</section></div><div class="notice">${icon('info')} Успешных плановых повторений: ${s.p.sessions.filter(e=>e.kind==='review'&&e.success).length}. Просроченных: ${s.overdue}. Первичный тест показывает результат занятия. Долговременное запоминание закрепляется полным циклом повторений.${last?' Последнее занятие: '+fmt(last.date,true)+'.':''}</div>`;
 }
-function settingsPage(){return `${heading('Всё по-вашему','Ваш темп, ваши данные, ваше пространство.')}<div class="settings-grid"><section class="neo settings-panel"><h2>${icon('book')} Учебные материалы</h2><label class="field-label" for="deck-select">Активная колода</label><select id="deck-select" class="neo-select full">${deckOptions()}</select><p>Все колоды доступны пользователям. Загрузка и переименование — у администратора. Прогресс каждой колоды сохраняется отдельно.</p><div class="button-row">${sharedDecks?.admin?btn(icon('upload')+' Загрузить JSON-колоду','import','primary'):''}${btn('Скачать пример','sample','subtle')}</div>${btn('Схема и инструкция','schema','text-btn')} ${btn(copy.downloadCourse,'download-course','text-btn')} ${btn(copy.sources,'sources','text-btn')}</section><section class="neo settings-panel"><h2>${icon('calendar')} Ритм занятий</h2><label class="field-label" for="timezone">Часовой пояс</label><select id="timezone" class="neo-select full">${[...new Set([state.settings.timeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Novosibirsk','Asia/Vladivostok','Europe/Berlin','Europe/London','America/New_York','Asia/Tbilisi','Asia/Almaty','UTC'])].map(t=>`<option ${t===state.settings.timeZone?'selected':''}>${t}</option>`).join('')}</select><label class="field-label" for="reminder">Удобное время занятий</label><input type="time" class="neo-input" id="reminder" value="${esc(state.settings.reminder)}"><p>Время — ваш личный ориентир. MVP напоминает о повторениях внутри приложения; push при закрытом браузере не отправляется.</p></section><section class="neo settings-panel"><h2>${icon('sun')} Комфорт</h2><div class="setting-row"><div><strong>Тёмная тема</strong><small>Мягкие поверхности в вечерних оттенках</small></div><button class="switch ${state.settings.theme==='dark'?'on':''}" role="switch" aria-checked="${state.settings.theme==='dark'}" aria-label="Тёмная тема" data-action="theme"><span></span></button></div><div class="setting-row"><div><strong>Произношение</strong><small>Английский голос вашего устройства</small></div><button class="switch ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Произношение" data-action="sound"><span></span></button></div><p>${'speechSynthesis' in window?'Для озвучки используется синтез речи браузера. Доступность офлайн зависит от установленных голосов.':'В этом браузере озвучка недоступна.'}</p></section><section class="neo settings-panel"><h2>${icon('download')} Резервная копия</h2><p>Сохраните колоды, журнал ответов, очередь SRS и настройки в одном файле. Файл также позволяет перенести прежние результаты с другого адреса сайта.</p><div class="button-row">${btn(icon('download')+' Скачать копию','backup','primary')}${btn(icon('upload')+' Восстановить','restore','subtle')}</div><p class="tiny">Восстановление и импорт словаря — разные операции. Перед заменой данных будет предварительный отчёт.</p>${btn('Отчёт в Markdown','markdown','text-btn')}</section><section class="neo settings-panel danger-zone"><h2>Управление прогрессом</h2><p>Начать заново можно в любой момент. Сброс затрагивает только активную колоду; слова остаются.</p><div class="button-row">${btn('Обнулить прогресс','reset','subtle danger-text')}</div></section></div>`;}
+function settingsPage(){return `${heading('Всё по-вашему','Ваш темп, ваши данные, ваше пространство.')}<div class="settings-grid"><section class="neo settings-panel"><h2>${icon('book')} Учебные материалы</h2><label class="field-label" for="deck-select">Активная колода</label><select id="deck-select" class="neo-select full" ${state.session&&state.session.phase!=='result'?'disabled':''}>${deckOptions()}</select>${state.session&&state.session.phase!=='result'?'<p class="tiny">Чтобы сменить колоду, завершите текущую тренировку.</p>':''}<p>Все колоды доступны пользователям. Загрузка и переименование — у администратора. Прогресс каждой колоды сохраняется отдельно.</p><div class="button-row">${sharedDecks?.admin?btn(icon('upload')+' Загрузить JSON-колоду','import','primary'):''}${btn('Скачать пример','sample','subtle')}</div>${btn('Схема и инструкция','schema','text-btn')} ${btn(copy.downloadCourse,'download-course','text-btn')} ${btn(copy.sources,'sources','text-btn')}${deckCatalogControls()}</section><section class="neo settings-panel"><h2>${icon('calendar')} Ритм занятий</h2><label class="field-label" for="timezone">Часовой пояс</label><select id="timezone" class="neo-select full">${[...new Set([state.settings.timeZone,'Europe/Moscow','Europe/Kaliningrad','Europe/Samara','Asia/Yekaterinburg','Asia/Novosibirsk','Asia/Vladivostok','Europe/Berlin','Europe/London','America/New_York','Asia/Tbilisi','Asia/Almaty','UTC'])].map(t=>`<option ${t===state.settings.timeZone?'selected':''}>${t}</option>`).join('')}</select><label class="field-label" for="reminder">Удобное время занятий</label><input type="time" class="neo-input" id="reminder" value="${esc(state.settings.reminder)}"><p>Время — ваш личный ориентир. MVP напоминает о повторениях внутри приложения; push при закрытом браузере не отправляется.</p></section><section class="neo settings-panel"><h2>${icon('sun')} Комфорт</h2><div class="setting-row"><div><strong>Тёмная тема</strong><small>Мягкие поверхности в вечерних оттенках</small></div><button class="switch ${state.settings.theme==='dark'?'on':''}" role="switch" aria-checked="${state.settings.theme==='dark'}" aria-label="Тёмная тема" data-action="theme"><span></span></button></div><div class="setting-row"><div><strong>Произношение</strong><small>Английский голос вашего устройства</small></div><button class="switch ${state.settings.sound?'on':''}" role="switch" aria-checked="${state.settings.sound}" aria-label="Произношение" data-action="sound"><span></span></button></div><p>${'speechSynthesis' in window?'Для озвучки используется синтез речи браузера. Доступность офлайн зависит от установленных голосов.':'В этом браузере озвучка недоступна.'}</p></section><section class="neo settings-panel"><h2>${icon('download')} Резервная копия</h2><p>Сохраните колоды, журнал ответов, очередь SRS и настройки в одном файле. Файл также позволяет перенести прежние результаты с другого адреса сайта.</p><div class="button-row">${btn(icon('download')+' Скачать копию','backup','primary')}${btn(icon('upload')+' Восстановить','restore','subtle')}</div><p class="tiny">Восстановление и импорт словаря — разные операции. Перед заменой данных будет предварительный отчёт.</p>${btn('Отчёт в Markdown','markdown','text-btn')}</section><section class="neo settings-panel danger-zone"><h2>Управление прогрессом</h2><p>Начать заново можно в любой момент. Сброс затрагивает только активную колоду; слова остаются.</p><div class="button-row">${btn('Обнулить прогресс','reset','subtle danger-text')}</div></section></div>`;}
 let modalOpener;
 function showModal(title,body,wide=false){
   const root=$('#modal-root');
@@ -500,6 +503,10 @@ function showModal(title,body,wide=false){
 function closeModal(){
   const root=$('#modal-root');
   if(!root.firstElementChild)return;
+  if(root.querySelector('.dictionary-overlay')){
+    overlayDictionary.request?.abort();
+    overlayDictionary.request=null;
+  }
   root.innerHTML='';
   $('#app').inert=false;
   $('.skip-link').inert=false;
@@ -798,10 +805,11 @@ function render(options={}){
   if(speakingView)clearSpeaking();
   app.dataset.route=route;
   const pages={dashboard,today:todayPage,vocabulary:vocabularyPage,dictionary:externalDictionaryPage,favorites:favoritesPage,roadmap:roadmapPage,statistics:statisticsPage,profile:profilePage,settings:settingsPage,study:()=>studyPage(options),speaking:speakingPage};
-  app.innerHTML=shell((['dictionary','favorites','profile','speaking'].includes(route)?'':deckBar())+(pages[route]||dashboard)());
+  app.innerHTML=shell(dictionarySearchForm('global-dictionary-search',globalDictionaryQuery,{compact:true})+
+    (route==='study'?`<p class="study-deck">${esc(deckLabel(deck()))}</p>`:'')+(pages[route]||dashboard)());
   if(route==='study')fitStudyWord();
   if(route==='speaking')mountSpeakingPage();
-  if(options.focusAnswer!==false&&route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>{if(!studyMoving)$('#answer')?.focus();});
+  if(options.focusAnswer!==false&&route==='study'&&state.session?.phase!=='study'&&!state.session?.feedback)requestAnimationFrame(()=>{if(!studyMoving&&!app.inert)$('#answer')?.focus();});
 }
 async function actions(action,el){
   if(action==='close')return closeModal();
@@ -855,7 +863,8 @@ async function actions(action,el){
   }
   if(action==='favorite-toggle'||action==='study-favorite-toggle'){
     const word=action==='study-favorite-toggle'?currentBookmarkWord():null;
-    const entry=action==='favorite-toggle'?dictionary.results[Number(el.dataset.index)]:
+    const search=el.closest('.dictionary-overlay')?overlayDictionary:dictionary;
+    const entry=action==='favorite-toggle'?search.results[Number(el.dataset.index)]:
       word?.id===el.dataset.id?deckFavoriteEntry(word,deck().deck.title):null;
     if(!entry||!accountUser)return;
     const target=favorites,saved=savedTranslation(entry),key=saved?.entry_key||resultIdentity(entry);
@@ -869,7 +878,7 @@ async function actions(action,el){
     }finally{
       target.pending.delete(key);
       if(target===favorites&&route==='favorites')render();
-      else if(target===favorites){paintDictionaryResults();paintStudyBookmark();}
+      if(target===favorites){paintDictionaryResults();paintStudyBookmark();}
     }
     return;
   }
@@ -941,9 +950,22 @@ async function actions(action,el){
   if(action==='help')return showModal('Десять слов. Пять повторений.',`<div class="help-steps"><div><span>01</span><section><h3>Познакомьтесь</h3><p>10 слов, транскрипции, переводы и живые примеры.</p></section></div><div><span>02</span><section><h3>Вспомните сами</h3><p>Переведите с русского на английский и заполните пропуски. Нужны 80% отдельно в каждом упражнении. «Уже знаю» исключает слово из урока и SRS; новые слова взамен не добавляются.</p></section></div><div><span>03</span><section><h3>Возвращайтесь к знакомому</h3><p>Повторяйте через 1, 2, 4, 7 и 16 дней после предыдущего успешного этапа. Пропуски сдвигают план, а не обнуляют его.</p></section></div></div><div class="notice">Без аккаунта прогресс хранится в этом браузере. Войдите через иконку профиля, чтобы продолжать занятия на других устройствах. Резервную копию можно скачать в любое время.</div>`);
 }
 document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(el&&!el.disabled){e.preventDefault();actions(el.dataset.action,el).catch(err=>{console.error(err);toast('Не удалось выполнить действие. '+err.message);});}if(e.target.classList.contains('modal-backdrop'))closeModal();});
-document.addEventListener('submit',e=>{if(e.target.id==='dictionary-search-form'){e.preventDefault();searchDictionary();return;}if(e.target.id==='new-password-form'){e.preventDefault();const form=e.target,button=form.querySelector('button');button.disabled=true;cloud.updatePassword($('#new-password').value).then(()=>{closeModal();toast('Пароль обновлён.');}).catch(err=>authMessage(err.message)).finally(()=>button.disabled=false);return;}if(e.target.id==='answer-form'){e.preventDefault();if(state.session?.feedback)nextQuestion();else checkCurrent();}});
-document.addEventListener('input',e=>{if(e.target.id==='dictionary-query')dictionary.query=e.target.value;if(e.target.id==='answer'){const a=state.session;if(!a)return;a.input=e.target.value;try{localStorage.setItem('lexicon-draft',JSON.stringify({sessionId:a.id,index:a.index,taskId:a.tasks[a.index]?.attemptId,phase:a.phase,input:a.input}));}catch{}clearTimeout(saveTimer);saveTimer=setTimeout(save,250);}if(e.target.id==='word-search'){filters.search=e.target.value;$('#word-list').innerHTML=wordList();}});
-document.addEventListener('change',async e=>{const el=e.target;try{if(el.id==='import-file')await previewImport(el.files[0]);if(el.id==='restore-file')await previewRestore(el.files[0]);if(el.id==='module-filter'){filters.module=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='status-filter'){filters.status=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='timezone'){state.settings.timeZone=el.value;await save();render();toast('Часовой пояс обновлён.');}if(el.id==='reminder'){state.settings.reminder=el.value;await save();toast('Время занятий сохранено.');}if((el.id==='deck-select'||el.id==='catalog-deck-select')){if(state.session&&state.session.phase!=='result'){render();toast('Сначала завершите текущую тренировку.');return;}state.session=null;state.activeDeckId=el.value;filters={search:'',module:'',status:'all'};await save();render();}}catch(err){toast(err.message);}});
+document.addEventListener('submit',e=>{
+  const form=e.target;
+  if(form.id==='global-dictionary-search'){
+    e.preventDefault();
+    globalDictionaryQuery=form.elements.query.value;
+    openDictionaryOverlay();
+    return;
+  }
+  if(form.id==='dictionary-search-form'||form.id==='dictionary-overlay-form'){
+    e.preventDefault();
+    searchDictionary(form.id==='dictionary-overlay-form'?overlayDictionary:dictionary,form.elements.query.value);
+    return;
+  }
+  if(e.target.id==='new-password-form'){e.preventDefault();const form=e.target,button=form.querySelector('button');button.disabled=true;cloud.updatePassword($('#new-password').value).then(()=>{closeModal();toast('Пароль обновлён.');}).catch(err=>authMessage(err.message)).finally(()=>button.disabled=false);return;}if(e.target.id==='answer-form'){e.preventDefault();if(state.session?.feedback)nextQuestion();else checkCurrent();}});
+document.addEventListener('input',e=>{if(e.target.id==='global-dictionary-search-query')globalDictionaryQuery=e.target.value;if(e.target.id==='dictionary-search-form-query')dictionary.query=e.target.value;if(e.target.id==='dictionary-overlay-form-query')overlayDictionary.query=e.target.value;if(e.target.id==='answer'){const a=state.session;if(!a)return;a.input=e.target.value;try{localStorage.setItem('lexicon-draft',JSON.stringify({sessionId:a.id,index:a.index,taskId:a.tasks[a.index]?.attemptId,phase:a.phase,input:a.input}));}catch{}clearTimeout(saveTimer);saveTimer=setTimeout(save,250);}if(e.target.id==='word-search'){filters.search=e.target.value;$('#word-list').innerHTML=wordList();}});
+document.addEventListener('change',async e=>{const el=e.target;try{if(el.id==='import-file')await previewImport(el.files[0]);if(el.id==='restore-file')await previewRestore(el.files[0]);if(el.id==='module-filter'){filters.module=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='status-filter'){filters.status=el.value;$('#word-list').innerHTML=wordList();}if(el.id==='timezone'){state.settings.timeZone=el.value;await save();render();toast('Часовой пояс обновлён.');}if(el.id==='reminder'){state.settings.reminder=el.value;await save();toast('Время занятий сохранено.');}if(el.id==='deck-select'){if(state.session&&state.session.phase!=='result'){render();toast('Сначала завершите текущую тренировку.');return;}state.session=null;state.activeDeckId=el.value;filters={search:'',module:'',status:'all'};await save();render();}}catch(err){toast(err.message);}});
 document.addEventListener('keydown',e=>{const modal=$('[role="dialog"]');if(modal){
   if(e.key==='Escape')closeModal();if(e.key==='Tab'){const els=[...modal.querySelectorAll('button:not(:disabled),a[href],input,select,summary,[tabindex="0"]')].filter(x=>x.getClientRects().length),first=els[0],last=els.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}return;}
   if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&e.target.closest('[data-study-card]')&&
@@ -952,7 +974,7 @@ document.addEventListener('keydown',e=>{const modal=$('[role="dialog"]');if(moda
     turnStudyCard(e.key==='ArrowRight'?1:-1);
     return;
   }
-  if(e.key==='Enter'&&route==='study'&&$('#app').dataset.route==='study'&&state.session?.feedback&&e.target.tagName!=='BUTTON'){e.preventDefault();nextQuestion();}});
+  if(e.key==='Enter'&&route==='study'&&$('#app').dataset.route==='study'&&state.session?.feedback&&!e.target.closest('button,[role="search"]')){e.preventDefault();nextQuestion();}});
 $('.skip-link').addEventListener('click',e=>{
   const main=$('#content');
   if(!main)return;

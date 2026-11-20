@@ -20,7 +20,6 @@
 
 .known-word-action{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;margin:20px 0}.known-word-action small{flex-basis:100%;text-align:center;line-height:1.5;color:var(--muted)}
 
-.deck-picker{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px;margin-bottom:30px}.deck-picker select{flex:1;min-width:180px;max-width:100%}.deck-picker small{flex-basis:100%;color:var(--muted)}
 
 /* Readable controls and a compact path to the next lesson. */
 :root {
@@ -45,7 +44,7 @@ h3, .task-card h3, .queue-copy h3 { font-size: 1rem; }
 .badge.success, .badge.warning, .badge.danger, .badge.muted { font-size: .875rem; }
 .eyebrow { margin-bottom: .35rem; }
 a:not(.btn):not(.nav-item):not(.brand):not(.icon-btn) { text-underline-offset: .17em; }
-.section-title a, .text-link, .catalog-login, .task-footer a { text-decoration: underline; }
+.section-title a, .text-link, .task-footer a { text-decoration: underline; }
 .btn, .btn.small, .btn.circle, .btn.text-btn, .icon-btn, .text-btn,
 .study-controls > .btn, .word-study .word-head > .icon-btn, .hero-actions > .btn,
 .settings-panel .btn, .modal .btn {
@@ -99,34 +98,7 @@ a.btn { text-decoration: none; }
 }
 .top-actions .profile-status .icon { width: 10px; height: 10px; stroke-width: 2.5; }
 #app[data-route=profile] .cloud-panel { max-width: 44rem; }
-.deck-picker {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: .25rem .75rem;
-  margin-bottom: 1rem;
-  padding: 0;
-}
-.deck-picker select { width: 100%; min-width: 0; }
-.deck-picker > small, .active-deck-name { grid-column: 2 / -1; }
-.active-deck-name { grid-row: 2; font-size: .875rem; color: var(--muted); overflow-wrap: anywhere; }
-.catalog-actions, .catalog-login { grid-column: 3; grid-row: 1; font-size: .875rem; }
-.catalog-actions { position: relative; }
-.catalog-actions summary, .registration-resend summary { min-height: var(--touch-size); padding-block: .65rem; cursor: pointer; }
-.catalog-panel {
-  position: absolute;
-  z-index: 3;
-  top: 100%;
-  right: 0;
-  display: grid;
-  gap: .5rem;
-  min-width: 12rem;
-  padding: .75rem;
-  background: var(--bg);
-  border: 1px solid var(--control-border);
-  border-radius: .75rem;
-}
-.catalog-login { display: flex; align-items: center; min-height: var(--touch-size); }
+.registration-resend summary { min-height: var(--touch-size); padding-block: .65rem; cursor: pointer; }
 .dashboard-layout, .dashboard-main, .dashboard-aside, .hero-copy { min-width: 0; }
 .hero {
   display: grid;
@@ -322,9 +294,6 @@ a.btn { text-decoration: none; }
   .sidebar .nav-item { min-width: 44px; font-size: .75rem; line-height: 1.15; padding: .25rem .1rem; }
   .sidebar .nav-item .icon { margin-bottom: .1rem; }
   .page-heading { margin-bottom: .75rem; }
-  .deck-picker { grid-template-columns: auto minmax(0, 1fr); margin-bottom: .65rem; }
-  .catalog-actions, .catalog-login { grid-column: 2; grid-row: auto; justify-self: start; }
-  .catalog-panel { left: 0; right: auto; }
   .hero { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
   .hero-copy { text-align: left; }
   .hero-actions { justify-content: flex-start; }
@@ -350,24 +319,12 @@ a.btn { text-decoration: none; }
 }
 .sidebar-label { white-space: normal; overflow-wrap: anywhere; }
 #content:focus-visible { outline: none; }
-.deck-control { display: grid; min-width: 0; }
-.deck-control select, .deck-control .active-deck-name { grid-area: 1 / 1; }
-.deck-control select { color: transparent; height: 100%; }
-.deck-control select option { color: var(--text); }
-.deck-control .active-deck-name {
-  align-self: center;
-  margin: .5rem 2rem .5rem .75rem;
-  color: var(--text);
-  font-size: 1rem;
-  pointer-events: none;
-}
 .settings-panel .switch { width: 52px; height: var(--touch-size); border-color: var(--control-border); padding: 5px; }
 .settings-panel .switch span { width: 20px; height: 20px; }
 .settings-panel .switch.on span { transform: translateX(20px); }
 .bar-column small, .stats-layout .panel-title p, .calendar-day { font-size: .75rem; }
 @media (max-width: 767px) {
   .breadcrumb .breadcrumb-prefix, .breadcrumb > .icon { display: none; }
-  .catalog-panel { max-width: min(14rem, 65vw); }
   .progress-ring { justify-content: flex-start; padding: 0; }
   .ring-center { padding-top: .25rem; }
 }
@@ -410,7 +367,13 @@ a.btn { text-decoration: none; }
 .dictionary-search { display:flex; flex-wrap:wrap; gap:.75rem; margin-top:.5rem; }
 .dictionary-search input { flex:1 1 13rem; min-width:0; }
 .dictionary-panel form > p { margin-top:.65rem; }
-#dictionary-results { margin-top:1.25rem; }
+.dictionary-results { margin-top:1.25rem; }
+.global-dictionary-search { margin-bottom:1rem; }
+.global-dictionary-search .dictionary-search { flex-wrap:nowrap; gap:.5rem; margin-top:0; }
+.global-dictionary-search .dictionary-search input { flex:1; }
+.global-dictionary-search .dictionary-search > .btn { flex-shrink:0; width:auto; }
+.dictionary-overlay { overscroll-behavior:contain; }
+body:has(.dictionary-overlay) { overflow:hidden; }
 .dictionary-entry { padding:1.25rem 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
 .dictionary-entry h2 { font-size:1.4rem; margin-bottom:.5rem; }
 .dictionary-entry > p { font-size:1rem; line-height:1.55; }
@@ -475,6 +438,7 @@ a.btn { text-decoration: none; }
 .dictionary-panel .favorites-note { font-size:.875rem; line-height:1.5; margin-bottom:1rem; }
 @media(max-width:767px) {
   .dictionary-panel { padding:1rem; }
+  .dictionary-overlay { padding:0; }
   .dictionary-search > .btn { width:100%; }
 }
 .dictionary-pronunciation { margin:.5rem 0 .75rem; }
