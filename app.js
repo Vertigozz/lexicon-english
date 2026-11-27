@@ -1,4 +1,4 @@
-import {lookupWord,sourceURL,WIKI_LICENSE} from './wiktionary.js?v=13';
+import {lookupWord,searchWord,sourceURL,WIKI_LICENSE} from './wiktionary.js?v=13';
 import {Favorites,deckFavoriteEntry} from './favorites.js?v=37';
 import {SharedDecks,installSharedDecks} from './shared-decks.js';
 import {normalize,uid,localDate,addDays,checkAnswer,shuffle,makeEvent,appendEvent,derive,reviewQueue,nextModule,selectContext,validatePackage,mergePackage,validateBackup,learningTotals} from './core.js';
@@ -118,11 +118,12 @@ function externalDictionaryPage(){
     <section class="neo dictionary-panel">${dictionaryPanel('dictionary-search-form',dictionary)}</section>`;
 }
 let globalDictionaryQuery='';
-function openDictionaryOverlay(){
-  Object.assign(overlayDictionary,newDictionarySearch(),{query:globalDictionaryQuery,status:'loading'});
+function openDictionaryOverlay(query,opener){
+  overlayDictionary.request?.abort();
+  Object.assign(overlayDictionary,newDictionarySearch(),{query,status:'loading'});
   showModal('Найти перевод',`<div class="dictionary-panel dictionary-overlay">${dictionaryPanel('dictionary-overlay-form',overlayDictionary)}</div>`,true);
-  modalOpener=$('#global-dictionary-search-query');
-  searchDictionary(overlayDictionary,globalDictionaryQuery);
+  modalOpener=opener;
+  searchDictionary(overlayDictionary,query);
 }
 function favoritesPage(){
   return `${heading('Избранное','Личная коллекция слов и выбранных переводов.')}${dictionaryNavigation()}
@@ -615,6 +616,26 @@ function gapSentence(context,session,animate){
     '<span class="gap">_____</span>';
   return esc(before)+gap+esc(after);
 }
+function contextPhraseActions(){
+  return `<div class="exercise-phrase-action">
+    ${btn(icon('sound')+' Озвучить фразу','speak-phrase','subtle','type="button"')}
+    ${btn(icon('search')+' Найти перевод','translate-context','subtle','type="button" id="translate-context" aria-describedby="context-selection-hint"')}
+  </div><p class="tiny context-selection-hint" id="context-selection-hint">Выделите слово или выражение в английской фразе.</p>`;
+}
+const contextSelections=new WeakMap();
+function captureContextSelection(){
+  const sentence=$('.cloze-question'),hint=$('#context-selection-hint');
+  const selection=window.getSelection();
+  if(!sentence||!hint||!selection?.rangeCount||selection.isCollapsed)return;
+  const inSentence=sentence.contains(selection.anchorNode)&&sentence.contains(selection.focusNode);
+  const value=inSentence?selection.toString().trim():'';
+  contextSelections.set(sentence,value);
+  hint.textContent=value?'Выделено: '+value:'Выделите слово или выражение в английской фразе.';
+}
+document.addEventListener('selectionchange',captureContextSelection);
+document.addEventListener('pointerdown',event=>{
+  if(event.target.closest('#translate-context'))captureContextSelection();
+});
 function recallAnswer(session,word){
   return session.feedback.accepted.find(option=>normalize(option)===normalize(session.input))??word.word;
 }
@@ -628,7 +649,7 @@ function studyPage({animateAnswer}={}){const a=state.session;if(!a)return `${hea
   const allowsPronunciation = a.kind === 'initial' || a.kind === 'review' || a.kind === 'difficult';
   const showBookmark=canBookmarkAnsweredTask(a,t);
   const revealAnswer=Boolean(animateAnswer&&animateAnswer===t.attemptId);
-  return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${a.kind==='difficult'?'Сложные слова':a.kind==='final'?'Итоговая проверка':day(a.module)} · ${phaseLabel(t.type)}</span>${badge(a.kind==='initial'?(t.type==='recall'?'Шаг 2 из 3':'Шаг 3 из 3'):a.kind==='review'?'Повторение R'+a.stage:'Дополнительная практика','muted')}</div><div class="study-container">${exerciseProgress(ix+1,phaseTasks.length,'Вопрос')}<section class="neo exercise-card ${allowsPronunciation||showBookmark?'with-speech':''} ${showBookmark&&accountUser?'with-bookmark':''}" data-study-card tabindex="-1">${a.feedback&&(allowsPronunciation||showBookmark)?`<div class="exercise-card-actions">${studyCardActions(w,{speech:allowsPronunciation,bookmark:showBookmark})}</div>`:''}<div class="exercise-kicker">${t.type==='gaps'?'ВОССТАНОВИТЕ СЛОВО В КОНТЕКСТЕ':t.type==='enru'?'ВСПОМНИТЕ РУССКОЕ ЗНАЧЕНИЕ':'ВСПОМНИТЕ АНГЛИЙСКОЕ СЛОВО'}</div>${t.reused?'<div class="context-notice">Новые контексты закончились: это предложение уже встречалось. Добавьте упражнения через импорт.</div>':''}<h1 class="exercise-question ${t.type==='gaps'?'cloze-question':''}" lang="${t.type==='recall'?'ru':'en'}">${c?gapSentence(c,a,revealAnswer):esc(t.type==='enru'?w.word:w.recallPrompt||w.translations.join('; '))}${t.type==='recall'&&a.feedback?` <span class="recall-solution">— <span lang="en" class="gap-answer${revealAnswer?' gap-reveal':''}">${esc(recallAnswer(a,w))}</span></span>`:''}</h1>${c?`<p class="exercise-translation">${esc(c.ru)}</p>`:'<p class="exercise-translation">'+(t.type==='enru'?'Введите одно из русских значений':'Без подсказок. Только вы и ваша память.')+'</p>'}${c&&a.feedback?`<div class="exercise-phrase-action">${btn(icon('sound')+' Озвучить фразу','speak-phrase','subtle','type="button"')}</div>`:''}<form id="answer-form" aria-label="Ответ на вопрос ${ix+1}"><label for="answer" class="sr-only">${t.type==='enru'?'Русский перевод':'Английское слово'}</label><div class="study-answer-row">${studyCardPager(ix,phaseTasks.length)}<input id="answer" data-session-id="${esc(a.id)}" data-task-index="${a.index}" data-task-id="${esc(t.attemptId)}" data-phase="${esc(a.phase)}" class="neo-input answer-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" lang="${t.type==='enru'?'ru':'en'}" placeholder="${t.type==='enru'?'Введите перевод…':'Введите английское слово…'}" value="${esc(a.input)}" ${a.feedback?'disabled':''} aria-describedby="answer-help"></div><div id="answer-help" class="input-hint">${a.feedback?'':t.type==='gaps'?'Введите только пропущенное слово':'Регистр и пробелы по краям не учитываются'}</div>${a.feedback?feedbackHTML(a,w,c,t.type,revealAnswer):btn('Проверить '+icon('arrow'),'check','primary full','type="submit"')}</form>${a.kind!=='final'&&!a.feedback?`<div class="known-word-action">${btn('Уже знаю это слово','known-word','text-btn',`data-id="${esc(w.id)}" type="button"`)}</div>`:''}</section><div class="exercise-foot">${icon('lock')} Ответ сохраняется автоматически <span>Enter — ${a.feedback?(nextUnansweredTask(a)<0?'посмотреть результат':'продолжить'):'проверить'}</span></div></div>`;
+  return `<div class="study-top"><button class="text-btn" data-action="pause">${icon('chevron','back-icon')} Сохранить и выйти</button><span>${a.kind==='difficult'?'Сложные слова':a.kind==='final'?'Итоговая проверка':day(a.module)} · ${phaseLabel(t.type)}</span>${badge(a.kind==='initial'?(t.type==='recall'?'Шаг 2 из 3':'Шаг 3 из 3'):a.kind==='review'?'Повторение R'+a.stage:'Дополнительная практика','muted')}</div><div class="study-container">${exerciseProgress(ix+1,phaseTasks.length,'Вопрос')}<section class="neo exercise-card ${allowsPronunciation||showBookmark?'with-speech':''} ${showBookmark&&accountUser?'with-bookmark':''}" data-study-card tabindex="-1">${a.feedback&&(allowsPronunciation||showBookmark)?`<div class="exercise-card-actions">${studyCardActions(w,{speech:allowsPronunciation,bookmark:showBookmark})}</div>`:''}<div class="exercise-kicker">${t.type==='gaps'?'ВОССТАНОВИТЕ СЛОВО В КОНТЕКСТЕ':t.type==='enru'?'ВСПОМНИТЕ РУССКОЕ ЗНАЧЕНИЕ':'ВСПОМНИТЕ АНГЛИЙСКОЕ СЛОВО'}</div>${t.reused?'<div class="context-notice">Новые контексты закончились: это предложение уже встречалось. Добавьте упражнения через импорт.</div>':''}<h1 class="exercise-question ${t.type==='gaps'?'cloze-question':''}" lang="${t.type==='recall'?'ru':'en'}">${c?gapSentence(c,a,revealAnswer):esc(t.type==='enru'?w.word:w.recallPrompt||w.translations.join('; '))}${t.type==='recall'&&a.feedback?` <span class="recall-solution">— <span lang="en" class="gap-answer${revealAnswer?' gap-reveal':''}">${esc(recallAnswer(a,w))}</span></span>`:''}</h1>${c?`<p class="exercise-translation">${esc(c.ru)}</p>`:'<p class="exercise-translation">'+(t.type==='enru'?'Введите одно из русских значений':'Без подсказок. Только вы и ваша память.')+'</p>'}${c&&a.feedback?contextPhraseActions():''}<form id="answer-form" aria-label="Ответ на вопрос ${ix+1}"><label for="answer" class="sr-only">${t.type==='enru'?'Русский перевод':'Английское слово'}</label><div class="study-answer-row">${studyCardPager(ix,phaseTasks.length)}<input id="answer" data-session-id="${esc(a.id)}" data-task-index="${a.index}" data-task-id="${esc(t.attemptId)}" data-phase="${esc(a.phase)}" class="neo-input answer-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" lang="${t.type==='enru'?'ru':'en'}" placeholder="${t.type==='enru'?'Введите перевод…':'Введите английское слово…'}" value="${esc(a.input)}" ${a.feedback?'disabled':''} aria-describedby="answer-help"></div><div id="answer-help" class="input-hint">${a.feedback?'':t.type==='gaps'?'Введите только пропущенное слово':'Регистр и пробелы по краям не учитываются'}</div>${a.feedback?feedbackHTML(a,w,c,t.type,revealAnswer):btn('Проверить '+icon('arrow'),'check','primary full','type="submit"')}</form>${a.kind!=='final'&&!a.feedback?`<div class="known-word-action">${btn('Уже знаю это слово','known-word','text-btn',`data-id="${esc(w.id)}" type="button"`)}</div>`:''}</section><div class="exercise-foot">${icon('lock')} Ответ сохраняется автоматически <span>Enter — ${a.feedback?(nextUnansweredTask(a)<0?'посмотреть результат':'продолжить'):'проверить'}</span></div></div>`;
 }
 function feedbackHTML(a,w,c,type,animate){
   const f=a.feedback;
@@ -823,6 +844,17 @@ function render(options={}){
 }
 async function actions(action,el){
   if(action==='close')return closeModal();
+  if(action==='translate-context'){
+    if(route!=='study'||state.session?.phase!=='gaps'||!state.session.feedback)return;
+    captureContextSelection();
+    const selected=contextSelections.get($('.cloze-question'));
+    if(!selected)return toast('Сначала выделите слово или выражение в английской фразе.');
+    let query;
+    try{query=searchWord(selected.replace(/^\p{P}+|\p{P}+$/gu,'').trim());}
+    catch(error){return toast(error.message);}
+    openDictionaryOverlay(query,el);
+    return;
+  }
   if(action==='turn-study-card')return turnStudyCard(Number(el.dataset.direction));
   if(action==='dictionary-speak')return pronounceWord(el.dataset.word);
   if(action==='favorite-pronunciation'){
@@ -980,7 +1012,7 @@ document.addEventListener('submit',e=>{
   if(form.id==='global-dictionary-search'){
     e.preventDefault();
     globalDictionaryQuery=form.elements.query.value;
-    openDictionaryOverlay();
+    openDictionaryOverlay(globalDictionaryQuery,$('#global-dictionary-search-query'));
     return;
   }
   if(form.id==='dictionary-search-form'||form.id==='dictionary-overlay-form'){
