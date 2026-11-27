@@ -1,6 +1,6 @@
-const CACHE='lexicon-shell-v56-context-dictionary';
+const CACHE='lexicon-shell-v57-quiet-context-review';
 const AUTH_SDK='./vendor/supabase.js?v=34';
-const ASSETS=['./','./index.html','./styles.css?v=56','./app.js?v=56','./wiktionary.js?v=13','./favorites.js?v=37','./core.js','./known.js','./study-navigation.js?v=40','./shared-decks.js','./storage.js','./sync-state.js','./session-draft.js','./cloud.js?v=52','./cloud-config.js','./speaking-config.js','./account-panel.js?v=52','./auth-screen.js?v=34','./auth-screen.css?v=33',AUTH_SDK,'./data/seed.js','./icon.svg','./manifest.webmanifest','./data/starter.json','./data/import.schema.json','./catalog.js','./credits.js','./data/english-b1b2-1000.json','./data/course-manifest.json','./data/sources.md'];
+const ASSETS=['./','./index.html','./styles.css?v=56','./app.js?v=57','./wiktionary.js?v=13','./favorites.js?v=37','./core.js','./known.js','./study-navigation.js?v=40','./shared-decks.js','./storage.js','./sync-state.js','./session-draft.js','./cloud.js?v=52','./cloud-config.js','./speaking-config.js','./account-panel.js?v=52','./auth-screen.js?v=34','./auth-screen.css?v=33',AUTH_SDK,'./data/seed.js','./icon.svg','./manifest.webmanifest','./data/starter.json','./data/import.schema.json','./catalog.js','./credits.js','./data/english-b1b2-1000.json','./data/course-manifest.json','./data/sources.md'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('lexicon-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
