@@ -190,6 +190,7 @@ a.btn { text-decoration: none; }
 .exercise-kicker, .exercise-foot, .exercise-foot > span { font-size: .875rem; }
 .exercise-kicker { letter-spacing: .025em; margin-bottom: 1rem; }
 .exercise-question { line-height: 1.4; overflow-wrap: anywhere; }
+.exercise-phrase-action { margin: 0 0 1rem; }
 .gap-answer {
   color: var(--accent);
   background: color-mix(in srgb,var(--accent) 13%,transparent);
